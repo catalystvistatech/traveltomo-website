@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser } from "@/lib/actions/auth";
 import {
   challengeDetailsSchema,
   challengeVerificationSchema,
@@ -12,15 +13,32 @@ import { randomUUID } from "crypto";
 
 export async function getMerchantChallenges() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return [];
+
+  const canViewAll =
+    currentUser.role === "admin" || currentUser.role === "superadmin";
+
+  if (canViewAll) {
+    const { data } = await supabase
+      .from("challenges")
+      .select("*, places(name), rewards(*)")
+      .order("created_at", { ascending: false });
+
+    return data ?? [];
+  }
+
+  if (
+    currentUser.role !== "merchant" ||
+    currentUser.merchant_request_status !== "approved"
+  ) {
+    return [];
+  }
 
   const { data } = await supabase
     .from("challenges")
     .select("*, places(name), rewards(*)")
-    .eq("merchant_id", user.id)
+    .eq("merchant_id", currentUser.id)
     .order("created_at", { ascending: false });
 
   return data ?? [];
@@ -66,10 +84,20 @@ export async function createChallenge(payload: {
     return { error: rewardParsed.error.flatten().fieldErrors };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: { _form: ["Not authenticated"] } };
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { error: { _form: ["Not authenticated"] } };
+  if (
+    currentUser.role !== "merchant" ||
+    currentUser.merchant_request_status !== "approved"
+  ) {
+    return {
+      error: {
+        _form: [
+          "Your merchant account is not approved yet. Please wait for admin verification.",
+        ],
+      },
+    };
+  }
 
   const challengeQR = `TT-CH-${randomUUID()}`;
   const rewardQR = `TT-RW-${randomUUID()}`;
@@ -77,7 +105,7 @@ export async function createChallenge(payload: {
   const { data: challenge, error: chError } = await supabase
     .from("challenges")
     .insert({
-      merchant_id: user.id,
+      merchant_id: currentUser.id,
       ...detailsParsed.data,
       ...verifParsed.data,
       quiz_choices: verifParsed.data.quiz_choices
@@ -93,7 +121,7 @@ export async function createChallenge(payload: {
 
   const { error: rwError } = await supabase.from("rewards").insert({
     challenge_id: challenge.id,
-    merchant_id: user.id,
+    merchant_id: currentUser.id,
     ...rewardParsed.data,
     qr_code_value: rewardQR,
   });
