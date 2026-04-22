@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Trophy, Gift, BarChart3,
-  Shield, MapPin, Users, LogOut,
+  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
@@ -17,13 +17,19 @@ import type { UserProfile } from "@/lib/actions/auth";
 const merchantNav = [
   { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { title: "Business Profile", href: "/admin/business", icon: Store },
-  { title: "Challenges", href: "/admin/challenges", icon: Trophy },
+  { title: "Travel Challenges", href: "/admin/travel-challenges", icon: Trophy },
+  { title: "Template Library", href: "/admin/template-library", icon: FileStack },
+  { title: "Verify Completions", href: "/admin/completions", icon: CheckCircle2 },
+  { title: "Promote", href: "/admin/promote", icon: Megaphone },
   { title: "Rewards", href: "/admin/rewards", icon: Gift },
   { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
 ];
 
 const adminNav = [
-  { title: "Approval Queue", href: "/admin/manage/challenges", icon: Shield },
+  { title: "Business Verification", href: "/admin/manage/businesses", icon: Shield },
+  { title: "Travel Challenge Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
+  { title: "Challenge Approvals", href: "/admin/manage/challenges", icon: ListChecks },
+  { title: "Templates", href: "/admin/templates", icon: FileStack },
   { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
   { title: "Places", href: "/admin/manage/places", icon: MapPin },
 ];
@@ -64,7 +70,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {user.role === "admin" && (
+        {(user.role === "admin" || user.role === "superadmin") && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-zinc-500">Admin</SidebarGroupLabel>
             <SidebarGroupContent>

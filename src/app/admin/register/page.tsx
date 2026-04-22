@@ -33,7 +33,7 @@ export default function RegisterPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: name } },
+      options: { data: { full_name: name, requested_role: "merchant" } },
     });
 
     if (error) {
@@ -53,7 +53,7 @@ export default function RegisterPage() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-white">Check your email</CardTitle>
             <CardDescription className="text-zinc-400">
-              We sent a confirmation link to <strong className="text-white">{email}</strong>.
+              We sent a confirmation link to <strong className="text-white">{email}</strong>. After confirming, your merchant account will remain pending until admin verification.
             </CardDescription>
           </CardHeader>
           <CardContent>

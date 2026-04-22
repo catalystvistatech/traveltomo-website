@@ -19,7 +19,7 @@ export default async function DashboardLayout({
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
         <div className="text-center space-y-4 p-8">
           <h1 className="text-2xl font-bold">Access Denied</h1>
-          <p className="text-zinc-400">This dashboard is for merchants and admins only.</p>
+          <p className="text-zinc-400">This dashboard is for approved merchants and admins only.</p>
         </div>
       </div>
     );
