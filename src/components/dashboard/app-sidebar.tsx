@@ -3,43 +3,29 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  Store,
-  Trophy,
-  Gift,
-  BarChart3,
-  Shield,
-  MapPin,
-  Users,
-  LogOut,
+  LayoutDashboard, Store, Trophy, Gift, BarChart3,
+  Shield, MapPin, Users, LogOut,
 } from "lucide-react";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
+  SidebarGroupContent, SidebarMenu, SidebarMenuButton,
+  SidebarMenuItem, SidebarHeader, SidebarFooter,
 } from "@/components/ui/sidebar";
 import { signOut } from "@/lib/actions/auth";
 import type { UserProfile } from "@/lib/actions/auth";
 
 const merchantNav = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Business Profile", href: "/business", icon: Store },
-  { title: "Challenges", href: "/challenges", icon: Trophy },
-  { title: "Rewards", href: "/rewards", icon: Gift },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { title: "Business Profile", href: "/admin/business", icon: Store },
+  { title: "Challenges", href: "/admin/challenges", icon: Trophy },
+  { title: "Rewards", href: "/admin/rewards", icon: Gift },
+  { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
 ];
 
 const adminNav = [
-  { title: "Approval Queue", href: "/admin/challenges", icon: Shield },
-  { title: "Merchants", href: "/admin/merchants", icon: Users },
-  { title: "Places", href: "/admin/places", icon: MapPin },
+  { title: "Approval Queue", href: "/admin/manage/challenges", icon: Shield },
+  { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
+  { title: "Places", href: "/admin/manage/places", icon: MapPin },
 ];
 
 export function AppSidebar({ user }: { user: UserProfile }) {
@@ -48,21 +34,20 @@ export function AppSidebar({ user }: { user: UserProfile }) {
 
   async function handleSignOut() {
     await signOut();
-    router.push("/login");
+    router.push("/admin/login");
     router.refresh();
   }
 
   return (
     <Sidebar className="border-zinc-800">
       <SidebarHeader className="border-b border-zinc-800 p-4">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/admin" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600">
             <span className="text-sm font-bold text-white">T</span>
           </div>
           <span className="text-lg font-bold text-white">TravelTomo</span>
         </Link>
       </SidebarHeader>
-
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-zinc-500">Menu</SidebarGroupLabel>
@@ -70,10 +55,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
             <SidebarMenu>
               {merchantNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.href}
-                    render={<Link href={item.href} />}
-                  >
+                  <SidebarMenuButton isActive={pathname === item.href} render={<Link href={item.href} />}>
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
@@ -82,7 +64,6 @@ export function AppSidebar({ user }: { user: UserProfile }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
         {user.role === "admin" && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-zinc-500">Admin</SidebarGroupLabel>
@@ -90,10 +71,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
               <SidebarMenu>
                 {adminNav.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      render={<Link href={item.href} />}
-                    >
+                    <SidebarMenuButton isActive={pathname === item.href} render={<Link href={item.href} />}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
@@ -104,23 +82,16 @@ export function AppSidebar({ user }: { user: UserProfile }) {
           </SidebarGroup>
         )}
       </SidebarContent>
-
       <SidebarFooter className="border-t border-zinc-800 p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700 text-xs font-bold text-white">
             {(user.display_name ?? user.email)?.[0]?.toUpperCase() ?? "?"}
           </div>
           <div className="flex-1 truncate">
-            <p className="text-sm font-medium text-white truncate">
-              {user.display_name ?? "Merchant"}
-            </p>
+            <p className="text-sm font-medium text-white truncate">{user.display_name ?? "Merchant"}</p>
             <p className="text-xs text-zinc-400 truncate">{user.email}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-zinc-400 hover:text-white transition-colors"
-            title="Sign out"
-          >
+          <button onClick={handleSignOut} className="text-zinc-400 hover:text-white transition-colors" title="Sign out">
             <LogOut className="h-4 w-4" />
           </button>
         </div>

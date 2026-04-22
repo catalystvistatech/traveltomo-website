@@ -31,8 +31,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isAuthPage =
-    pathname.startsWith("/login") || pathname.startsWith("/register");
-  const isCallback = pathname.startsWith("/auth/callback");
+    pathname === "/admin/login" || pathname === "/admin/register";
+  const isCallback = pathname.startsWith("/admin/auth/callback");
 
   if (isCallback) {
     return supabaseResponse;
@@ -40,13 +40,13 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/admin/login";
     return NextResponse.redirect(url);
   }
 
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/admin";
     return NextResponse.redirect(url);
   }
 
