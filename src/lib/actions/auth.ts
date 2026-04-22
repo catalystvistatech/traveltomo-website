@@ -52,6 +52,30 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+/**
+ * Let a regular user flag their profile as wanting to become a merchant so
+ * admins can pick up the request from `/admin/manage/merchants`.
+ */
+export async function requestMerchantAccess() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not signed in." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ merchant_request_status: "pending" })
+    .eq("id", user.id)
+    .eq("merchant_request_status", "none");
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
 export async function getRoleManagementData() {
   const currentUser = await getCurrentUser();
   if (!currentUser || !isAdminRole(currentUser.role)) {
