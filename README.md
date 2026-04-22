@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TravelTomo Admin Dashboard
+
+Admin and merchant dashboard for the TravelTomo platform. Merchants create challenges, set rewards, and generate QR codes. Admins approve challenges and manage the ecosystem.
+
+## Stack
+
+- **Next.js 16** (App Router, Server Components, Server Actions)
+- **TypeScript** (strict)
+- **Tailwind CSS v4** + **shadcn/ui v4**
+- **Supabase** (Auth with PKCE, PostgreSQL with RLS, Storage)
+- **Zod** (server-side validation)
+- **Deployed on Vercel**
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Copy env template and fill in your Supabase keys
+cp .env.local.example .env.local
+
+# Run the dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Scope | Where to Find |
+|----------|-------|---------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase Dashboard > Settings > API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase Dashboard > Settings > API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only | Supabase Dashboard > Settings > API (reveal) |
 
-## Learn More
+## Database Setup
 
-To learn more about Next.js, take a look at the following resources:
+Run `supabase/001_schema.sql` in the Supabase SQL Editor to create all tables, RLS policies, and triggers.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Merchant Flow
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Register / Login
+2. Complete business profile
+3. Create challenge (5-step wizard: details, verification, reward, QR, review)
+4. Submit for review
+5. Admin approves -> challenge goes live
+6. Monitor completions and redemptions
 
-## Deploy on Vercel
+## Architecture
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full platform architecture, schema design, security model, and decision log.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Related Repos
+
+| Repo | Description |
+|------|-------------|
+| `TravelTomo/` | iOS app (Swift/SwiftUI) |
+| `traveltomo-website/` | This repo (admin dashboard) |
+| Android (future) | Kotlin/Compose app |
+
+All clients share the same Supabase backend.
