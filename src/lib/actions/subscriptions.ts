@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { subscriptionSchema } from "@/lib/validations/marketplace";
+import { createInvoice, isMockMode } from "@/lib/payments/xendit";
 import { revalidatePath } from "next/cache";
 
 const TIER_PRICES_CENTS: Record<"basic" | "featured" | "premium", number> = {
@@ -53,24 +54,53 @@ export async function startSubscription(input: unknown) {
   const endsAt = new Date();
   endsAt.setUTCMonth(endsAt.getUTCMonth() + parsed.data.months);
 
+  const amountCents = TIER_PRICES_CENTS[parsed.data.tier] * parsed.data.months;
+
+  const externalId = `sub-${user.id}-${Date.now()}`;
+  const invoice = await createInvoice({
+    externalId,
+    amount: amountCents / 100,
+    currency: "PHP",
+    description: `TravelTomo ${parsed.data.tier} promotion (${parsed.data.months} mo)`,
+    payerEmail: user.email,
+    metadata: { merchant_id: user.id, tier: parsed.data.tier },
+  });
+
+  // In mock mode we treat the invoice as already paid so local/CI flows
+  // can exercise recommendation logic. In live mode we'd insert the row
+  // with status 'pending' and wait for the Xendit webhook.
+  const subscriptionStatus: "active" | "pending" = isMockMode()
+    ? "active"
+    : "pending";
+
   const { data, error } = await supabase
     .from("merchant_subscriptions")
     .insert({
       merchant_id: user.id,
       tier: parsed.data.tier,
-      status: "active",
+      status: subscriptionStatus,
       starts_at: new Date().toISOString(),
       ends_at: endsAt.toISOString(),
-      amount_cents: TIER_PRICES_CENTS[parsed.data.tier] * parsed.data.months,
+      amount_cents: amountCents,
       currency: "PHP",
-      external_ref: `dev-${Date.now()}`,
+      payment_provider: "xendit",
+      external_ref: invoice.id,
     })
     .select("id")
     .single();
 
   if (error) return { error: { _form: [error.message] } };
   revalidatePath("/admin/promote");
-  return { success: true, id: data.id };
+  return {
+    success: true,
+    id: data.id,
+    invoice: {
+      id: invoice.id,
+      url: invoice.invoice_url,
+      status: invoice.status,
+      mock: isMockMode(),
+    },
+  };
 }
 
 export async function cancelSubscription(subscriptionId: string) {

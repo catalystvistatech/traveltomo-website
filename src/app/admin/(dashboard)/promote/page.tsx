@@ -88,7 +88,24 @@ export default function PromotePage() {
         );
         return;
       }
-      toast.success("Promotion started � you'll appear in recommendations.");
+      const invoice = "invoice" in r ? r.invoice : undefined;
+      if (invoice?.mock) {
+        toast.success("Promotion activated (mock payment).", {
+          description: "You'll appear in recommendations immediately.",
+          action: {
+            label: "Open invoice",
+            onClick: () => window.open(invoice.url, "_blank"),
+          },
+        });
+      } else if (invoice?.url) {
+        toast.message("Redirecting to Xendit...", {
+          description: "Complete payment to activate the promotion.",
+        });
+        window.location.href = invoice.url;
+        return;
+      } else {
+        toast.success("Promotion started.");
+      }
       await reload();
     });
   }
