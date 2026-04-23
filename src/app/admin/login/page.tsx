@@ -50,7 +50,15 @@ export default function LoginPage() {
         return;
       }
 
-      setError(error.message);
+      // Supabase now returns `invalid_credentials` for unconfirmed
+      // accounts too (to prevent email enumeration), so we can't
+      // always tell "wrong password" from "needs to confirm". Surface
+      // both possibilities rather than leaving the user stuck.
+      setError(
+        isInvalidCredentialsError(error)
+          ? "Wrong email or password. If you just registered, your email may not be confirmed yet — enter your 6-digit code below."
+          : error.message,
+      );
       setLoading(false);
       return;
     }
@@ -186,7 +194,24 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
-          <p className="mt-6 text-center text-sm text-zinc-400">
+          {/* Persistent escape hatch: Supabase reports unconfirmed
+              accounts as `invalid_credentials` now, so this link is the
+              only reliable way for a merchant who registered but never
+              opened the email to complete verification. */}
+          <p className="mt-4 text-center text-sm text-zinc-400">
+            Haven&apos;t confirmed your email?{" "}
+            <Link
+              href={
+                email
+                  ? `/admin/verify?email=${encodeURIComponent(email)}`
+                  : "/admin/verify"
+              }
+              className="text-red-400 hover:text-red-300 font-medium"
+            >
+              Enter your code
+            </Link>
+          </p>
+          <p className="mt-2 text-center text-sm text-zinc-400">
             New merchant?{" "}
             <Link href="/admin/register" className="text-red-400 hover:text-red-300 font-medium">
               Register here
@@ -211,6 +236,25 @@ function isEmailNotConfirmedError(error: unknown): boolean {
   if (
     typeof err.message === "string" &&
     err.message.toLowerCase().includes("email not confirmed")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+// Recent Supabase builds collapse "wrong password" and "account not
+// confirmed" into a single `invalid_credentials` error to prevent
+// email enumeration, so we can't reliably differentiate them from the
+// server response. Detect the generic case and hint at both causes.
+function isInvalidCredentialsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: unknown; message?: unknown };
+  if (typeof err.code === "string" && err.code === "invalid_credentials") {
+    return true;
+  }
+  if (
+    typeof err.message === "string" &&
+    err.message.toLowerCase().includes("invalid login credentials")
   ) {
     return true;
   }
