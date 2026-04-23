@@ -61,6 +61,7 @@ export async function GET(request: Request) {
   const wantsGoogle =
     mode === "nearby" || mode === "trending" || (mode === "" && lat != null && lng != null);
 
+  let googleError: string | null = null;
   if (wantsGoogle && lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
     try {
       const raw = await googleNearby({
@@ -84,7 +85,12 @@ export async function GET(request: Request) {
         source: "google",
       });
     } catch (error) {
-      console.error("google nearby failed, falling back to db:", error);
+      googleError = error instanceof Error ? error.message : String(error);
+      // Log with enough context to diagnose from Vercel function logs.
+      console.error(
+        `[/v1/places] mode=${mode} lat=${lat} lng=${lng} google failed:`,
+        googleError,
+      );
       // fall through to the DB path below
     }
   }
@@ -115,5 +121,6 @@ export async function GET(request: Request) {
     data: data ?? [],
     count: data?.length ?? 0,
     source: "db",
+    ...(googleError ? { google_error: googleError } : {}),
   });
 }
