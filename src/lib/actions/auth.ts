@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
 
 export type UserRole = "user" | "merchant" | "admin" | "superadmin";
@@ -115,6 +116,17 @@ export async function updateUserRole(targetUserId: string, role: UserRole) {
 
   if (error) return { error: error.message };
 
+  if (role === "merchant") {
+    await emitNotification({
+      userId: targetUserId,
+      kind: "merchant_status",
+      title: "You're a merchant!",
+      body: "Your account has been upgraded. You can now create challenges.",
+      icon: "person.badge.shield.checkmark.fill",
+      metadata: { role },
+    });
+  }
+
   revalidatePath("/admin/manage/merchants");
   return { success: true };
 }
@@ -145,6 +157,32 @@ export async function reviewMerchantRequest(
     .eq("id", targetUserId);
 
   if (error) return { error: error.message };
+
+  const notificationCopy =
+    decision === "approved"
+      ? {
+          title: "Merchant request approved",
+          body: "You've been granted merchant access. Start creating challenges.",
+          icon: "person.badge.shield.checkmark.fill",
+        }
+      : decision === "rejected"
+        ? {
+            title: "Merchant request rejected",
+            body: "Your merchant request was not approved. Contact support for details.",
+            icon: "xmark.seal.fill",
+          }
+        : {
+            title: "Merchant access suspended",
+            body: "Your merchant access has been suspended.",
+            icon: "exclamationmark.shield.fill",
+          };
+
+  await emitNotification({
+    userId: targetUserId,
+    kind: "merchant_status",
+    ...notificationCopy,
+    metadata: { decision },
+  });
 
   revalidatePath("/admin/manage/merchants");
   return { success: true };

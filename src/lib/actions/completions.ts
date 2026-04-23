@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
+import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
 
 export async function listPendingCompletions() {
@@ -29,6 +30,14 @@ export async function verifyCompletion(completionId: string) {
   const user = await getCurrentUser();
   if (!user) return { error: "Not authenticated" };
   const supabase = await createClient();
+
+  const { data: completion, error: fetchError } = await supabase
+    .from("challenge_completions")
+    .select("id, user_id, challenge_id, challenges!inner(title)")
+    .eq("id", completionId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+
   const { error } = await supabase
     .from("challenge_completions")
     .update({
@@ -39,6 +48,24 @@ export async function verifyCompletion(completionId: string) {
     })
     .eq("id", completionId);
   if (error) return { error: error.message };
+
+  if (completion?.user_id) {
+    const challengeTitle =
+      (completion as { challenges?: { title?: string } | null }).challenges?.title ??
+      "your challenge";
+    await emitNotification({
+      userId: completion.user_id,
+      kind: "challenge_verified",
+      title: "Reward unlocked",
+      body: `Your completion for “${challengeTitle}” has been verified.`,
+      icon: "checkmark.seal.fill",
+      metadata: {
+        completion_id: completionId,
+        challenge_id: completion.challenge_id,
+      },
+    });
+  }
+
   revalidatePath("/admin/completions");
   return { success: true };
 }
@@ -50,6 +77,14 @@ export async function rejectCompletion(
   const user = await getCurrentUser();
   if (!user) return { error: "Not authenticated" };
   const supabase = await createClient();
+
+  const { data: completion, error: fetchError } = await supabase
+    .from("challenge_completions")
+    .select("id, user_id, challenge_id, challenges!inner(title)")
+    .eq("id", completionId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+
   const { error } = await supabase
     .from("challenge_completions")
     .update({
@@ -60,6 +95,25 @@ export async function rejectCompletion(
     })
     .eq("id", completionId);
   if (error) return { error: error.message };
+
+  if (completion?.user_id) {
+    const challengeTitle =
+      (completion as { challenges?: { title?: string } | null }).challenges?.title ??
+      "your challenge";
+    await emitNotification({
+      userId: completion.user_id,
+      kind: "challenge_verified",
+      title: "Completion rejected",
+      body: `“${challengeTitle}” was not verified: ${reason}`,
+      icon: "xmark.seal.fill",
+      metadata: {
+        completion_id: completionId,
+        challenge_id: completion.challenge_id,
+        reason,
+      },
+    });
+  }
+
   revalidatePath("/admin/completions");
   return { success: true };
 }
