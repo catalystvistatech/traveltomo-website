@@ -7,14 +7,29 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+
+  // Dedicated "needs to verify email" state so users aren't staring at
+  // a cryptic red banner with no way forward.
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">(
+    "idle",
+  );
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -22,9 +37,19 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) {
+      if (isEmailNotConfirmedError(error)) {
+        setPendingEmail(email);
+        setNeedsVerify(true);
+        setLoading(false);
+        return;
+      }
+
       setError(error.message);
       setLoading(false);
       return;
@@ -32,6 +57,86 @@ export default function LoginPage() {
 
     router.push("/admin");
     router.refresh();
+  }
+
+  async function handleResend() {
+    if (!pendingEmail) return;
+    setError(null);
+    setResendState("sending");
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingEmail,
+    });
+
+    if (error) {
+      setError(error.message);
+      setResendState("idle");
+      return;
+    }
+
+    setResendState("sent");
+  }
+
+  if (needsVerify) {
+    const verifyHref = `/admin/verify?email=${encodeURIComponent(pendingEmail)}`;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
+        <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-600">
+              <span className="text-xl font-bold text-white">T</span>
+            </div>
+            <CardTitle className="text-2xl text-white">
+              Confirm your email
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Your account{" "}
+              <strong className="text-white">{pendingEmail}</strong> exists but
+              isn&apos;t verified yet. Enter the 6-digit code we emailed you to
+              finish signing in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {error && (
+              <p className="text-sm text-red-400 bg-red-400/10 px-3 py-2 rounded-md">
+                {error}
+              </p>
+            )}
+            <Button
+              onClick={() => router.push(verifyHref)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+            >
+              Enter confirmation code
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResend}
+              disabled={resendState === "sending"}
+              className="w-full bg-transparent border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white"
+            >
+              {resendState === "sending"
+                ? "Sending…"
+                : resendState === "sent"
+                ? "Code resent — check your email"
+                : "Resend code"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setNeedsVerify(false);
+                setResendState("idle");
+                setError(null);
+              }}
+              className="w-full text-zinc-400 hover:text-white hover:bg-zinc-800"
+            >
+              Use a different email
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -91,4 +196,23 @@ export default function LoginPage() {
       </Card>
     </div>
   );
+}
+
+// Supabase reports unconfirmed email differently depending on version:
+// - `error.code === "email_not_confirmed"` (newer supabase-js)
+// - `error.message` containing "Email not confirmed" (older versions)
+// Accept either so the branch is version-robust.
+function isEmailNotConfirmedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: unknown; message?: unknown };
+  if (typeof err.code === "string" && err.code === "email_not_confirmed") {
+    return true;
+  }
+  if (
+    typeof err.message === "string" &&
+    err.message.toLowerCase().includes("email not confirmed")
+  ) {
+    return true;
+  }
+  return false;
 }
