@@ -55,7 +55,12 @@ export async function GET(request: Request) {
   const types = parseTypes(searchParams.get("types"));
   const limit = Math.min(
     Math.max(Number(searchParams.get("limit") ?? 20), 1),
-    50,
+    20,
+  );
+  const offsetRaw = Number(searchParams.get("offset") ?? 0);
+  const offset = Math.min(
+    Math.max(Number.isFinite(offsetRaw) ? Math.trunc(offsetRaw) : 0, 0),
+    1000,
   );
 
   const wantsGoogle =
@@ -79,11 +84,26 @@ export async function GET(request: Request) {
           ? sortByTrending(mirrored)
           : mirrored;
 
-      return NextResponse.json({
-        data: sorted.slice(0, limit),
-        count: sorted.length,
-        source: "google",
-      });
+      const page = sorted.slice(offset, offset + limit);
+      const hasMore = offset + limit < sorted.length;
+
+      return NextResponse.json(
+        {
+          data: page,
+          count: page.length,
+          total: sorted.length,
+          offset,
+          has_more: hasMore,
+          source: "google",
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "public, s-maxage=120, stale-while-revalidate=3600",
+            Vary: "Authorization",
+          },
+        },
+      );
     } catch (error) {
       googleError = error instanceof Error ? error.message : String(error);
       // Log with enough context to diagnose from Vercel function logs.
