@@ -31,7 +31,12 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isAuthPage =
-    pathname === "/admin/login" || pathname === "/admin/register";
+    pathname === "/admin/login" ||
+    pathname === "/admin/register" ||
+    // /admin/verify must be reachable without a session: users arrive
+    // here after registration to submit the 6-digit email confirmation
+    // code, which is what creates their session in the first place.
+    pathname === "/admin/verify";
   const isCallback = pathname.startsWith("/admin/auth/callback");
 
   if (isCallback) {
