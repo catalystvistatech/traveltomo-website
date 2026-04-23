@@ -47,17 +47,28 @@ export default function RegisterPage() {
   }
 
   if (success) {
+    const verifyHref = `/admin/verify?email=${encodeURIComponent(email)}`;
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
         <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-white">Check your email</CardTitle>
             <CardDescription className="text-zinc-400">
-              We sent a confirmation link to <strong className="text-white">{email}</strong>. After confirming, your merchant account will remain pending until admin verification.
+              We sent a 6-digit confirmation code to <strong className="text-white">{email}</strong>. After you verify, your merchant account will remain pending until admin verification.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button onClick={() => router.push("/admin/login")} className="w-full bg-red-600 hover:bg-red-700 text-white">
+          <CardContent className="space-y-2">
+            <Button
+              onClick={() => router.push(verifyHref)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+            >
+              Enter confirmation code
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => router.push("/admin/login")}
+              className="w-full text-zinc-400 hover:text-white hover:bg-zinc-800"
+            >
               Back to login
             </Button>
           </CardContent>
