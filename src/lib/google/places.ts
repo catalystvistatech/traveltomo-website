@@ -109,7 +109,7 @@ function apiKey(): string {
 
 function photoURL(
   photoName: string | undefined,
-  maxWidth = 640,
+  maxWidth = 480,
 ): string | null {
   if (!photoName) return null;
   const key = process.env.GOOGLE_MAPS_API_KEY;
@@ -119,6 +119,19 @@ function photoURL(
     key,
   });
   return `${GOOGLE_PHOTO_MEDIA(photoName)}?${qs.toString()}`;
+}
+
+/**
+ * Larger photo URL intended for place detail screens. Exported so
+ * `/v1/places/[id]` can request a higher-resolution image without
+ * inflating list-card responses. Returns `null` when no photo name is
+ * provided or the API key is missing.
+ */
+export function detailPhotoURL(
+  photoName: string | undefined,
+  maxWidth = 1280,
+): string | null {
+  return photoURL(photoName, maxWidth);
 }
 
 function cityFromComponents(
