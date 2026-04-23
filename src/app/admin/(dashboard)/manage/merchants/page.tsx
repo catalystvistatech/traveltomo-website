@@ -1,25 +1,88 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  getCurrentUser,
+  getRoleManagementData,
+  reviewMerchantRequest,
+  updateUserRole,
+  type UserRole,
+} from "@/lib/actions/auth";
 import { Users } from "lucide-react";
+import { toast } from "sonner";
 
-export default async function ManageMerchantsPage() {
-  const supabase = await createClient();
+type ManagedProfile = {
+  id: string;
+  role: UserRole;
+  merchant_request_status: string | null;
+  display_name: string | null;
+  created_at: string;
+  businesses?: Record<string, unknown>[];
+};
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, role, display_name, avatar_url, created_at, businesses(*)")
-    .in("role", ["merchant", "admin"])
-    .order("created_at", { ascending: false });
+const roleOptions: UserRole[] = ["user", "merchant", "admin", "superadmin"];
 
-  const profilesList = (profiles ?? []) as Record<string, unknown>[];
+export default function ManageMerchantsPage() {
+  const [profilesList, setProfilesList] = useState<ManagedProfile[]>([]);
+  const [viewerRole, setViewerRole] = useState<UserRole>("user");
+  const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
+
+  async function loadData() {
+    const [viewer, managed] = await Promise.all([
+      getCurrentUser(),
+      getRoleManagementData(),
+    ]);
+
+    if (viewer) setViewerRole(viewer.role);
+
+    if (managed.error) {
+      toast.error(managed.error);
+      return;
+    }
+
+    setProfilesList((managed.data as ManagedProfile[]) ?? []);
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function handleRoleChange(userId: string, role: UserRole) {
+    setLoadingUserId(userId);
+    const result = await updateUserRole(userId, role);
+    setLoadingUserId(null);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Role updated to ${role}.`);
+    await loadData();
+  }
+
+  async function handleReview(
+    userId: string,
+    decision: "approved" | "rejected" | "suspended"
+  ) {
+    setLoadingUserId(userId);
+    const result = await reviewMerchantRequest(userId, decision);
+    setLoadingUserId(null);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Merchant request ${decision}.`);
+    await loadData();
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Merchants & Admins</h1>
         <p className="text-zinc-400 mt-1">
-          View all merchants and admins in the system.
+          Superadmins can change all roles. Admins and superadmins can manually verify merchants.
         </p>
       </div>
 
@@ -40,6 +103,7 @@ export default async function ManageMerchantsPage() {
           {profilesList.map((profile) => {
             const businesses = (profile.businesses ?? []) as Record<string, unknown>[];
             const biz = businesses[0] ?? null;
+            const requestStatus = profile.merchant_request_status ?? "none";
 
             return (
               <Card
@@ -57,14 +121,8 @@ export default async function ManageMerchantsPage() {
                       </p>
                     )}
                   </div>
-                  <Badge
-                    className={
-                      (profile.role as string) === "admin"
-                        ? "bg-red-600/20 text-red-400"
-                        : "bg-blue-600/20 text-blue-400"
-                    }
-                  >
-                    {profile.role as string}
+                  <Badge className="bg-blue-600/20 text-blue-400">
+                    {profile.role}
                   </Badge>
                 </CardHeader>
                 <CardContent>
@@ -104,12 +162,74 @@ export default async function ManageMerchantsPage() {
                       No business profile yet
                     </p>
                   )}
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-zinc-500 text-xs">Merchant request:</span>
+                    <Badge
+                      className={
+                        requestStatus === "approved"
+                          ? "bg-green-600/20 text-green-400"
+                          : requestStatus === "pending"
+                            ? "bg-yellow-600/20 text-yellow-400"
+                            : requestStatus === "rejected" || requestStatus === "suspended"
+                              ? "bg-red-600/20 text-red-400"
+                              : "bg-zinc-700 text-zinc-300"
+                      }
+                    >
+                      {requestStatus}
+                    </Badge>
+                  </div>
                   <p className="text-xs text-zinc-600 mt-3">
                     Joined{" "}
                     {new Date(
                       profile.created_at as string
                     ).toLocaleDateString()}
                   </p>
+                  {(viewerRole === "admin" || viewerRole === "superadmin") && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={loadingUserId === profile.id || requestStatus === "approved"}
+                        onClick={() => handleReview(profile.id, "approved")}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Approve Merchant
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={loadingUserId === profile.id || requestStatus === "rejected"}
+                        onClick={() => handleReview(profile.id, "rejected")}
+                        className="border-red-600 text-red-400 hover:bg-red-600/10"
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={loadingUserId === profile.id || requestStatus === "suspended"}
+                        onClick={() => handleReview(profile.id, "suspended")}
+                        className="border-orange-600 text-orange-400 hover:bg-orange-600/10"
+                      >
+                        Suspend
+                      </Button>
+                    </div>
+                  )}
+                  {viewerRole === "superadmin" && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {roleOptions.map((role) => (
+                        <Button
+                          key={role}
+                          size="sm"
+                          variant="outline"
+                          disabled={loadingUserId === profile.id || profile.role === role}
+                          onClick={() => handleRoleChange(profile.id, role)}
+                          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        >
+                          Set {role}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

@@ -6,7 +6,8 @@
 -- 1. PROFILES (extends auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'merchant', 'admin')),
+  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'merchant', 'admin', 'superadmin')),
+  merchant_request_status TEXT NOT NULL DEFAULT 'none' CHECK (merchant_request_status IN ('none', 'pending', 'approved', 'rejected', 'suspended')),
   display_name TEXT,
   avatar_url  TEXT,
   stay_start  DATE,
@@ -32,7 +33,7 @@ CREATE POLICY "Users can update own profile"
 CREATE POLICY "Admins can view all profiles"
   ON public.profiles FOR SELECT
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 -- 2. AUTO-CREATE PROFILE ON SIGNUP
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -42,16 +43,20 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, display_name, avatar_url, role)
+  INSERT INTO public.profiles (id, display_name, avatar_url, role, merchant_request_status)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name'),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture'),
-    'user'
+    CASE WHEN COALESCE(NEW.raw_user_meta_data->>'requested_role', 'user') = 'merchant' THEN 'merchant' ELSE 'user' END,
+    CASE WHEN COALESCE(NEW.raw_user_meta_data->>'requested_role', 'user') = 'merchant' THEN 'pending' ELSE 'none' END
   );
   -- Set default app_metadata role
   UPDATE auth.users
-  SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '{"role": "user"}'::jsonb
+  SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object(
+    'role',
+    CASE WHEN COALESCE(NEW.raw_user_meta_data->>'requested_role', 'user') = 'merchant' THEN 'merchant' ELSE 'user' END
+  )
   WHERE id = NEW.id;
   RETURN NEW;
 END;
@@ -107,13 +112,19 @@ ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Merchants can manage own business"
   ON public.businesses FOR ALL
   TO authenticated
-  USING (merchant_id = auth.uid())
-  WITH CHECK (merchant_id = auth.uid());
+  USING (
+    merchant_id = auth.uid()
+    AND (auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin', 'superadmin')
+  )
+  WITH CHECK (
+    merchant_id = auth.uid()
+    AND (auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin', 'superadmin')
+  );
 
 CREATE POLICY "Admins can view all businesses"
   ON public.businesses FOR SELECT
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE INDEX idx_businesses_merchant ON public.businesses(merchant_id);
 
@@ -145,13 +156,13 @@ CREATE POLICY "Authenticated users can read active places"
 CREATE POLICY "Admins can manage all places"
   ON public.places FOR ALL
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin')
-  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'))
+  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE POLICY "Merchants can insert places"
   ON public.places FOR INSERT
   TO authenticated
-  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin'));
+  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin', 'superadmin'));
 
 CREATE INDEX idx_places_city ON public.places(city);
 CREATE INDEX idx_places_google ON public.places(google_place_id);
@@ -185,14 +196,20 @@ ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Merchants can manage own challenges"
   ON public.challenges FOR ALL
   TO authenticated
-  USING (merchant_id = auth.uid())
-  WITH CHECK (merchant_id = auth.uid());
+  USING (
+    merchant_id = auth.uid()
+    AND (auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin', 'superadmin')
+  )
+  WITH CHECK (
+    merchant_id = auth.uid()
+    AND (auth.jwt()->'app_metadata'->>'role') IN ('merchant', 'admin', 'superadmin')
+  );
 
 CREATE POLICY "Admins can manage all challenges"
   ON public.challenges FOR ALL
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin')
-  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'))
+  WITH CHECK ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE POLICY "App users can read live challenges"
   ON public.challenges FOR SELECT
@@ -231,7 +248,7 @@ CREATE POLICY "Merchants can manage own rewards"
 CREATE POLICY "Admins can view all rewards"
   ON public.rewards FOR SELECT
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE POLICY "App users can read active rewards"
   ON public.rewards FOR SELECT
@@ -278,7 +295,7 @@ CREATE POLICY "Merchants can view completions for their challenges"
 CREATE POLICY "Admins can view all completions"
   ON public.challenge_completions FOR SELECT
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE INDEX idx_completions_user ON public.challenge_completions(user_id);
 CREATE INDEX idx_completions_challenge ON public.challenge_completions(challenge_id);
@@ -316,7 +333,7 @@ CREATE POLICY "Merchants can view redemptions for their rewards"
 CREATE POLICY "Admins can view all redemptions"
   ON public.reward_redemptions FOR SELECT
   TO authenticated
-  USING ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+  USING ((auth.jwt()->'app_metadata'->>'role') IN ('admin', 'superadmin'));
 
 CREATE INDEX idx_redemptions_user ON public.reward_redemptions(user_id);
 CREATE INDEX idx_redemptions_reward ON public.reward_redemptions(reward_id);
