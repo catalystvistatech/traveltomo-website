@@ -26,6 +26,7 @@ const merchantNav = [
 ];
 
 const adminNav = [
+  { title: "Users", href: "/admin/manage/users", icon: Users },
   { title: "Business Verification", href: "/admin/manage/businesses", icon: Shield },
   { title: "Travel Challenge Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
   { title: "Challenge Approvals", href: "/admin/manage/challenges", icon: ListChecks },
