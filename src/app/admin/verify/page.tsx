@@ -126,7 +126,8 @@ function VerifyForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+                readOnly={!!initialEmail}
+                className={`bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 ${initialEmail ? "opacity-60 cursor-not-allowed" : ""}`}
               />
             </div>
             <div className="space-y-2">
