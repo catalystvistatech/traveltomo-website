@@ -20,7 +20,7 @@ export default function VerifyPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
-          <p className="text-zinc-400">Loading…</p>
+          <p className="text-zinc-400">Loading...</p>
         </div>
       }
     >
@@ -157,7 +157,7 @@ function VerifyForm() {
               disabled={loading}
               className="w-full bg-red-600 hover:bg-red-700 text-white"
             >
-              {loading ? "Verifying…" : "Verify"}
+              {loading ? "Verifying..." : "Verify"}
             </Button>
           </form>
 
@@ -169,7 +169,7 @@ function VerifyForm() {
               className="text-red-400 hover:text-red-300 font-medium disabled:opacity-60"
             >
               {resendState === "sending"
-                ? "Sending…"
+                ? "Sending..."
                 : resendState === "sent"
                 ? "Code sent"
                 : "Resend code"}
