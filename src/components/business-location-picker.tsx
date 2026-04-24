@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -161,13 +160,19 @@ export function BusinessLocationPicker({
     [onChange, value.city, value.name],
   );
 
+  // Only show the map preview once the merchant has actually selected a
+  // suggestion (google_place_id is set) or manually entered an address.
+  // The form default lat/lng (15.143, 120.586) should not trigger a map.
   const hasCoordinates =
     Number.isFinite(value.latitude) &&
     Number.isFinite(value.longitude) &&
-    !(value.latitude === 0 && value.longitude === 0);
+    !(value.latitude === 0 && value.longitude === 0) &&
+    !!(value.google_place_id || value.address?.trim());
 
-  const staticMapSrc = hasCoordinates
-    ? `/v1/places/static-map?lat=${value.latitude}&lng=${value.longitude}&zoom=16&w=640&h=240`
+  // OpenStreetMap embed ù no API key required, interactive out of the
+  // box, and tolerates the same same-origin CSP the dashboard uses.
+  const osmSrc = hasCoordinates
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${value.longitude - 0.008},${value.latitude - 0.005},${value.longitude + 0.008},${value.latitude + 0.005}&layer=mapnik&marker=${value.latitude},${value.longitude}`
     : null;
 
   return (
@@ -237,16 +242,21 @@ export function BusinessLocationPicker({
         )}
       </div>
 
-      {staticMapSrc && (
+      {osmSrc && (
         <div className="overflow-hidden rounded-lg border border-zinc-800">
-          <Image
-            src={staticMapSrc}
-            alt={`Map centered on ${value.address || "selected location"}`}
-            width={640}
-            height={240}
-            className="w-full h-auto"
-            unoptimized
+          <iframe
+            src={osmSrc}
+            title={`Map ù ${value.address || "selected location"}`}
+            width="640"
+            height="240"
+            className="w-full"
+            style={{ height: 240, border: 0, display: "block" }}
+            loading="lazy"
+            referrerPolicy="no-referrer"
           />
+          <p className="px-3 py-1.5 text-xs text-zinc-500">
+            ù <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-300 underline underline-offset-2">OpenStreetMap</a> contributors
+          </p>
         </div>
       )}
 
