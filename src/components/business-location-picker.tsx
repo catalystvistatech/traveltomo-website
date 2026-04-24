@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { APIProvider, Map, Marker } from "@vis.gl/react-google-maps";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2, MapPin, Search } from "lucide-react";
 
+const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
+
 /**
  * Single prediction returned by `/v1/places/autocomplete`.
- * Mirrors what the route serialises so the types match end-to-end.
  */
 export interface PlacePrediction {
   placeId: string;
@@ -31,29 +33,17 @@ export interface BusinessLocationValue {
 
 interface Props {
   value: BusinessLocationValue;
-  /**
-   * Called with any subset of fields that should be patched on the
-   * parent form. `name` is only emitted when the merchant selects a
-   * place and the parent's current name field is empty.
-   */
   onChange: (patch: Partial<BusinessLocationValue>) => void;
-  /**
-   * Optional: bias autocomplete toward the merchant's current
-   * coordinate. Defaults to the value.latitude/longitude if present.
-   */
   biasLat?: number | null;
   biasLng?: number | null;
 }
 
 /**
- * Merchant-facing location picker. Replaces the raw address/city/lat/lng
- * inputs with:
- *   - A debounced Google Places autocomplete dropdown
- *   - A static-map preview of the currently-pinned coordinate
- *   - A manual override toggle for edge cases (businesses not on Google)
- *
- * The API key never touches the client; all Google calls are proxied
- * through `/v1/places/autocomplete` and `/v1/places/static-map`.
+ * Merchant-facing location picker:
+ *   ï Debounced Google Places autocomplete dropdown (server-side proxy)
+ *   ï Interactive Google Maps preview that updates on every selection
+ *   ï Draggable marker for fine-tuning (updates lat/lng on drag end)
+ *   ï Manual coordinate entry fallback for off-Google businesses
  */
 export function BusinessLocationPicker({
   value,
@@ -73,19 +63,12 @@ export function BusinessLocationPicker({
   const biasLatitude = biasLat ?? value.latitude ?? null;
   const biasLongitude = biasLng ?? value.longitude ?? null;
 
-  // Debounce the autocomplete query so we hit Google at most every
-  // 300ms and never for single-character inputs. Each in-flight
-  // request is tagged so late responses from a stale query are
-  // discarded (classic race condition guard).
+  // Debounced autocomplete ó 300 ms, stale-request guard via requestId.
   useEffect(() => {
     const trimmed = query.trim();
     const requestId = ++latestQueryRef.current;
 
     if (trimmed.length < 2) {
-      // Deferred so React doesn't flag this as a cascading-render
-      // setState-in-effect violation. Effect-order semantics are
-      // preserved because `requestId` already invalidated any
-      // in-flight search above.
       queueMicrotask(() => {
         if (requestId !== latestQueryRef.current) return;
         setPredictions([]);
@@ -93,6 +76,7 @@ export function BusinessLocationPicker({
       });
       return;
     }
+
     const timeout = setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
@@ -111,7 +95,7 @@ export function BusinessLocationPicker({
       } catch (error) {
         if (requestId !== latestQueryRef.current) return;
         setSearchError(
-          error instanceof Error ? error.message : "Search failed",
+          error instanceof Error ? error.message : "Search failed"
         );
         setPredictions([]);
       } finally {
@@ -122,8 +106,7 @@ export function BusinessLocationPicker({
     return () => clearTimeout(timeout);
   }, [query, biasLatitude, biasLongitude]);
 
-  // Dismiss the dropdown when clicking outside the picker entirely, so
-  // the list doesn't hover forever after selection or cancel.
+  // Dismiss dropdown on outside click.
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -146,8 +129,6 @@ export function BusinessLocationPicker({
         longitude: prediction.lng,
         google_place_id: prediction.placeId,
       };
-      // Only seed the name field when the parent form is empty so we
-      // don't clobber a merchant's custom branding.
       if (!value.name || value.name.trim().length === 0) {
         patch.name = prediction.name;
       }
@@ -157,26 +138,23 @@ export function BusinessLocationPicker({
       setPredictions([]);
       setManualOverride(false);
     },
-    [onChange, value.city, value.name],
+    [onChange, value.city, value.name]
   );
 
-  // Only show the map preview once the merchant has actually selected a
-  // suggestion (google_place_id is set) or manually entered an address.
-  // The form default lat/lng (15.143, 120.586) should not trigger a map.
-  const hasCoordinates =
+  // Show map once a location has been selected (via autocomplete or manual entry).
+  const hasPin =
     Number.isFinite(value.latitude) &&
     Number.isFinite(value.longitude) &&
     !(value.latitude === 0 && value.longitude === 0) &&
     !!(value.google_place_id || value.address?.trim());
 
-  // OpenStreetMap embed ù no API key required, interactive out of the
-  // box, and tolerates the same same-origin CSP the dashboard uses.
-  const osmSrc = hasCoordinates
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${value.longitude - 0.008},${value.latitude - 0.005},${value.longitude + 0.008},${value.latitude + 0.005}&layer=mapnik&marker=${value.latitude},${value.longitude}`
+  const center = hasPin
+    ? { lat: value.latitude, lng: value.longitude }
     : null;
 
   return (
     <div className="space-y-3" ref={containerRef}>
+      {/* ?? Search ?? */}
       <div className="space-y-2">
         <Label className="text-zinc-300">Search for your business *</Label>
         <div className="relative">
@@ -196,10 +174,11 @@ export function BusinessLocationPicker({
           )}
         </div>
 
+        {/* ?? Dropdown ?? */}
         {showResults && predictions.length > 0 && (
           <div
             role="listbox"
-            className="rounded-lg border border-zinc-800 bg-zinc-900 shadow-lg overflow-hidden"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 shadow-lg overflow-hidden z-50 relative"
           >
             {predictions.map((prediction) => (
               <button
@@ -230,36 +209,61 @@ export function BusinessLocationPicker({
           query.trim().length >= 2 &&
           !searchError && (
             <p className="text-xs text-zinc-500">
-              No matches on Google Maps. Try a different name or use
-              manual entry below.
+              No results. Try a different name or enable manual entry below.
             </p>
           )}
 
         {searchError && (
-          <p className="text-xs text-red-400">
-            Couldn&apos;t reach Google Maps: {searchError}
-          </p>
+          <p className="text-xs text-red-400">Search error: {searchError}</p>
         )}
       </div>
 
-      {osmSrc && (
+      {/* ?? Google Map ?? */}
+      {center && (
         <div className="overflow-hidden rounded-lg border border-zinc-800">
-          <iframe
-            src={osmSrc}
-            title={`Map ù ${value.address || "selected location"}`}
-            width="640"
-            height="240"
-            className="w-full"
-            style={{ height: 240, border: 0, display: "block" }}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-          <p className="px-3 py-1.5 text-xs text-zinc-500">
-            ù <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-300 underline underline-offset-2">OpenStreetMap</a> contributors
-          </p>
+          {MAPS_KEY ? (
+            <APIProvider apiKey={MAPS_KEY}>
+              <Map
+                style={{ width: "100%", height: 260 }}
+                defaultCenter={center}
+                center={center}
+                defaultZoom={16}
+                zoom={16}
+                gestureHandling="cooperative"
+                disableDefaultUI={false}
+                colorScheme="DARK"
+              >
+                <Marker
+                  position={center}
+                  draggable
+                  onDragEnd={(e) => {
+                    if (e.latLng) {
+                      onChange({
+                        latitude: e.latLng.lat(),
+                        longitude: e.latLng.lng(),
+                        google_place_id: null,
+                      });
+                    }
+                  }}
+                />
+              </Map>
+            </APIProvider>
+          ) : (
+            // Fallback if NEXT_PUBLIC_GOOGLE_MAPS_KEY is not yet set in Vercel
+            <div className="flex h-[260px] flex-col items-center justify-center gap-2 bg-zinc-800 text-zinc-400">
+              <MapPin className="h-6 w-6 text-red-400" />
+              <p className="text-sm font-medium text-white">
+                {value.latitude.toFixed(5)}, {value.longitude.toFixed(5)}
+              </p>
+              <p className="text-xs">
+                Add <code className="rounded bg-zinc-700 px-1">NEXT_PUBLIC_GOOGLE_MAPS_KEY</code> to Vercel to see the map
+              </p>
+            </div>
+          )}
         </div>
       )}
 
+      {/* ?? Address / City (editable after autocomplete) ?? */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label className="text-zinc-300">Address *</Label>
@@ -282,6 +286,7 @@ export function BusinessLocationPicker({
         </div>
       </div>
 
+      {/* ?? Manual coords fallback ?? */}
       <div>
         <Button
           type="button"
@@ -328,9 +333,7 @@ export function BusinessLocationPicker({
             />
           </div>
           <p className="sm:col-span-2 text-xs text-zinc-500">
-            Tip: open Google Maps, right-click on your business, and the
-            coordinates will be at the top of the menu. Clearing these
-            unlinks any previously-matched Google place.
+            Tip: right-click your business on Google Maps ó coordinates appear at the top of the menu.
           </p>
         </div>
       )}
