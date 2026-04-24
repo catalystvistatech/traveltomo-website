@@ -91,6 +91,13 @@ export const extendedBusinessSchema = z.object({
   contact_phone: z.string().max(30).optional().or(z.literal("")),
   website: z.string().url().optional().or(z.literal("")),
   hours: businessHoursSchema,
+  google_place_id: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
 });
 export type ExtendedBusinessInput = z.infer<typeof extendedBusinessSchema>;
 

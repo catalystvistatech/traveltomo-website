@@ -18,6 +18,10 @@
 export const GOOGLE_NEARBY_URL =
   "https://places.googleapis.com/v1/places:searchNearby";
 
+/** Text search (New) — find establishments by name or address. */
+export const GOOGLE_SEARCH_TEXT_URL =
+  "https://places.googleapis.com/v1/places:searchText";
+
 // The Places API (New) returns a photo resource name which we then turn
 // into a media URL the client can hit directly.
 export const GOOGLE_PHOTO_MEDIA = (name: string) =>
@@ -261,6 +265,74 @@ export async function googleNearby({
     );
   }
   const json = (await response.json()) as GoogleNearbyResponseNew;
+  return (json.places ?? [])
+    .map(normalize)
+    .filter((p): p is NormalizedPlace => p !== null);
+}
+
+interface GoogleSearchTextResponseNew {
+  places?: GooglePlaceNew[];
+}
+
+/**
+ * Google `places:searchText` — merchant-facing business lookup by name
+ * or address. Optional lat/lng bias improves local relevance.
+ */
+export async function googleTextSearch({
+  query,
+  latitude,
+  longitude,
+  radiusMeters = 50_000,
+  maxResults = 5,
+}: {
+  query: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusMeters?: number;
+  maxResults?: number;
+}): Promise<NormalizedPlace[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  const key = apiKey();
+  const body: Record<string, unknown> = {
+    textQuery: trimmed,
+    maxResultCount: Math.min(Math.max(maxResults, 1), 20),
+  };
+
+  if (
+    latitude != null &&
+    longitude != null &&
+    !Number.isNaN(latitude) &&
+    !Number.isNaN(longitude)
+  ) {
+    body.locationBias = {
+      circle: {
+        center: { latitude, longitude },
+        radius: Math.min(Math.max(radiusMeters, 100), 50_000),
+      },
+    };
+  }
+
+  const response = await fetch(GOOGLE_SEARCH_TEXT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": FIELD_MASK,
+    },
+    body: JSON.stringify(body),
+    next: { revalidate: 0 },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `google_places_search_text_${response.status}: ${text.slice(0, 200)}`,
+    );
+  }
+
+  const json = (await response.json()) as GoogleSearchTextResponseNew;
   return (json.places ?? [])
     .map(normalize)
     .filter((p): p is NormalizedPlace => p !== null);
