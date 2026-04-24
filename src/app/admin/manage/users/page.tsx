@@ -184,7 +184,7 @@ export default function UsersPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or email"
+            placeholder="Search name or email..."
             className="pl-9 bg-zinc-800 border-zinc-700 text-white"
           />
         </div>

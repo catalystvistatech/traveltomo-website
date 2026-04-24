@@ -113,7 +113,7 @@ export async function banUser(userId: string, reason: string) {
 
   const admin = createAdminClient();
 
-  // Check target user's role — admins cannot ban other admins/superadmins
+  // Check target user's role -- admins cannot ban other admins/superadmins
   const { data: target } = await admin
     .from("profiles")
     .select("role")
