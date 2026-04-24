@@ -40,10 +40,10 @@ interface Props {
 
 /**
  * Merchant-facing location picker:
- *   • Debounced Google Places autocomplete dropdown (server-side proxy)
- *   • Interactive Google Maps preview that updates on every selection
- *   • Draggable marker for fine-tuning (updates lat/lng on drag end)
- *   • Manual coordinate entry fallback for off-Google businesses
+ *   - Debounced Google Places autocomplete dropdown (server-side proxy)
+ *   - Interactive Google Maps preview that updates on every selection
+ *   - Draggable marker for fine-tuning (updates lat/lng on drag end)
+ *   - Manual coordinate entry fallback for off-Google businesses
  */
 export function BusinessLocationPicker({
   value,
@@ -63,7 +63,7 @@ export function BusinessLocationPicker({
   const biasLatitude = biasLat ?? value.latitude ?? null;
   const biasLongitude = biasLng ?? value.longitude ?? null;
 
-  // Debounced autocomplete — 300 ms, stale-request guard via requestId.
+  // Debounced autocomplete -- 300 ms, stale-request guard via requestId.
   useEffect(() => {
     const trimmed = query.trim();
     const requestId = ++latestQueryRef.current;
@@ -333,7 +333,7 @@ export function BusinessLocationPicker({
             />
           </div>
           <p className="sm:col-span-2 text-xs text-zinc-500">
-            Tip: right-click your business on Google Maps — coordinates appear at the top of the menu.
+            Tip: right-click your business on Google Maps -- coordinates appear at the top of the menu.
           </p>
         </div>
       )}
