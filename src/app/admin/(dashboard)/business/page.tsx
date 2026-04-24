@@ -34,6 +34,10 @@ import {
   type BusinessHoursInput,
   type ExtendedBusinessInput,
 } from "@/lib/validations/marketplace";
+import {
+  BusinessLocationPicker,
+  type BusinessLocationValue,
+} from "@/components/business-location-picker";
 
 const DAYS: (keyof BusinessHoursInput)[] = [
   "monday",
@@ -85,6 +89,7 @@ export default function BusinessPage() {
     contact_phone: "",
     website: "",
     hours: DEFAULT_HOURS,
+    google_place_id: "",
   });
 
   useEffect(() => {
@@ -114,6 +119,7 @@ export default function BusinessPage() {
         contact_phone: (rec.contact_phone as string) ?? "",
         website: (rec.website as string) ?? "",
         hours: ((rec.hours as BusinessHoursInput) ?? DEFAULT_HOURS) ?? DEFAULT_HOURS,
+        google_place_id: (rec.google_place_id as string) ?? "",
       });
     });
   }, []);
@@ -240,61 +246,21 @@ export default function BusinessPage() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Address *</Label>
-                <Input
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm({ ...form, address: e.target.value })
-                  }
-                  required
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">City *</Label>
-                <Input
-                  value={form.city}
-                  onChange={(e) =>
-                    setForm({ ...form, city: e.target.value })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-            </div>
+            <BusinessLocationPicker
+              value={{
+                name: form.name,
+                address: form.address,
+                city: form.city,
+                latitude: form.latitude,
+                longitude: form.longitude,
+                google_place_id: form.google_place_id ?? null,
+              }}
+              onChange={(patch: Partial<BusinessLocationValue>) =>
+                setForm((prev) => ({ ...prev, ...patch }))
+              }
+            />
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Latitude *</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={form.latitude}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      latitude: parseFloat(e.target.value || "0"),
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Longitude *</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={form.longitude}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      longitude: parseFloat(e.target.value || "0"),
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-zinc-300">
                   Service Radius (m)
@@ -310,12 +276,11 @@ export default function BusinessPage() {
                   }
                   className="bg-zinc-800 border-zinc-700 text-white"
                 />
+                <p className="text-xs text-zinc-500">
+                  Challenges must fall inside this radius of the business.
+                </p>
               </div>
             </div>
-            <p className="text-xs text-zinc-500 -mt-2">
-              Your challenges must fall inside this radius of the business.
-              Tip: paste coordinates from Google Maps.
-            </p>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">

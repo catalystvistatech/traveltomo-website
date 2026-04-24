@@ -61,6 +61,7 @@ export async function upsertBusiness(formData: ExtendedBusinessInput) {
     contact_phone: parsed.data.contact_phone || null,
     website: parsed.data.website || null,
     hours: parsed.data.hours,
+    google_place_id: parsed.data.google_place_id || null,
     verification_status: shouldRevert ? "pending" : undefined,
     updated_at: new Date().toISOString(),
   };
