@@ -203,28 +203,51 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
 }
 
 /**
+ * Primary types Google returns for mundane micro-businesses that are not
+ * interesting to travelers. Excluding them server-side means the API
+ * never returns them so we don't waste response quota or confuse users.
+ */
+const EXCLUDED_NEARBY_TYPES = [
+  // Utilities / errands
+  "atm", "bank", "post_office", "courier_service",
+  "insurance_agency", "real_estate_agency", "accounting", "lawyer",
+  // Everyday retail that travelers don't seek out
+  "convenience_store", "grocery_store", "supermarket", "drugstore",
+  "hardware_store", "home_improvement_store", "furniture_store",
+  "clothing_store", "shoe_store", "jewelry_store",
+  // Health / personal care
+  "dentist", "doctor", "physiotherapist", "veterinary_care",
+  "hair_salon", "beauty_salon", "nail_salon", "barber_shop",
+  // Auto
+  "gas_station", "car_wash", "car_repair", "car_dealer",
+  // Misc boring
+  "laundry", "dry_cleaning", "storage", "moving_company",
+  "electrician", "plumber", "locksmith",
+];
+
+/**
  * Runs a Google `places:searchNearby` request centered on a coordinate.
- * Pass one or more establishment types to filter; an empty list returns
- * a general mix (Google returns POIs when no type is specified).
  *
- * `rankPreference` controls whether results come back distance-sorted
- * or popularity-sorted. Google does not expose a "trending" signal
- * directly - we approximate it by asking for POPULARITY then re-sorting
- * in `sortByTrending`.
+ * Always ranks by POPULARITY so well-known landmarks, parks, and notable
+ * venues surface ahead of whichever tiny shop happens to be closest.
+ * A `minRatingCount` post-filter removes places that have too few reviews
+ * to be considered notable (e.g. unlisted sari-sari stores that ended up
+ * in Google's index but have no real user engagement).
  */
 export async function googleNearby({
   latitude,
   longitude,
   radiusMeters = 5_000,
   types,
-  rankByDistance = false,
+  minRatingCount = 20,
   maxResults = 20,
 }: {
   latitude: number;
   longitude: number;
   radiusMeters?: number;
   types?: EstablishmentType[];
-  rankByDistance?: boolean;
+  /** Minimum number of Google reviews. Places below this are filtered out. */
+  minRatingCount?: number;
   maxResults?: number;
 }): Promise<NormalizedPlace[]> {
   const key = apiKey();
@@ -234,10 +257,11 @@ export async function googleNearby({
     ),
   );
 
-  const body = {
-    includedTypes: googleTypes.length > 0 ? googleTypes : undefined,
+  const body: Record<string, unknown> = {
     maxResultCount: Math.min(Math.max(maxResults, 1), 20),
-    rankPreference: rankByDistance ? "DISTANCE" : "POPULARITY",
+    // Always popularity — we never want "closest first" in a travel app
+    // because that surfaces unlisted micro-businesses over iconic venues.
+    rankPreference: "POPULARITY",
     locationRestriction: {
       circle: {
         center: { latitude, longitude },
@@ -245,6 +269,14 @@ export async function googleNearby({
       },
     },
   };
+
+  if (googleTypes.length > 0) {
+    body.includedTypes = googleTypes;
+  } else {
+    // When no explicit type filter is requested, exclude the boring
+    // everyday categories so only travel-relevant POIs are returned.
+    body.excludedTypes = EXCLUDED_NEARBY_TYPES;
+  }
 
   const response = await fetch(GOOGLE_NEARBY_URL, {
     method: "POST",
@@ -267,7 +299,12 @@ export async function googleNearby({
   const json = (await response.json()) as GoogleNearbyResponseNew;
   return (json.places ?? [])
     .map(normalize)
-    .filter((p): p is NormalizedPlace => p !== null);
+    .filter((p): p is NormalizedPlace => p !== null)
+    .filter((p) =>
+      minRatingCount > 0
+        ? (p.user_ratings_total ?? 0) >= minRatingCount
+        : true,
+    );
 }
 
 interface GoogleSearchTextResponseNew {

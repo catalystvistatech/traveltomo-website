@@ -73,7 +73,9 @@ export async function GET(request: Request) {
         latitude: lat,
         longitude: lng,
         types: types.length > 0 ? types : undefined,
-        rankByDistance: mode !== "trending",
+        // Trending wants a higher bar (well-known places only).
+        // Nearby is slightly more lenient so smaller areas still get results.
+        minRatingCount: mode === "trending" ? 50 : 20,
       });
 
       // Mirror to our DB so downstream calls can resolve by UUID.
