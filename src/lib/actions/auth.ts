@@ -87,7 +87,7 @@ export async function getRoleManagementData() {
   const { data, error } = await adminClient
     .from("profiles")
     .select(
-      "id, role, merchant_request_status, display_name, avatar_url, created_at, businesses(id,name,city,category,is_verified)"
+      "id, role, merchant_request_status, display_name, avatar_url, created_at, businesses!businesses_merchant_id_fkey(id,name,city,category,verification_status)"
     )
     .order("created_at", { ascending: false });
 

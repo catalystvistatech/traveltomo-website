@@ -145,15 +145,17 @@ export default function ManageMerchantsPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Verified:</span>
+                        <span className="text-zinc-500">Business:</span>
                         <Badge
                           className={
-                            biz.is_verified
+                            biz.verification_status === "approved"
                               ? "bg-green-600/20 text-green-400"
-                              : "bg-zinc-700 text-zinc-300"
+                              : biz.verification_status === "pending"
+                                ? "bg-yellow-600/20 text-yellow-400"
+                                : "bg-zinc-700 text-zinc-300"
                           }
                         >
-                          {biz.is_verified ? "Yes" : "No"}
+                          {(biz.verification_status as string) ?? "unsubmitted"}
                         </Badge>
                       </div>
                     </div>
