@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/supabase/api";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** POST /v1/challenges/:id/accept � user accepts a rolled challenge */
+/** POST /v1/challenges/:id/accept ? user accepts a rolled challenge */
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
   const { user, client, error } = await requireUser(request);

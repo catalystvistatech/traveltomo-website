@@ -55,7 +55,7 @@ export default function BusinessesQueuePage() {
 
       {rows.length === 0 && (
         <p className="text-zinc-500 text-sm">
-          No pending businesses. Nice � inbox zero.
+          No pending businesses. Inbox zero!
         </p>
       )}
 
@@ -79,7 +79,7 @@ export default function BusinessesQueuePage() {
                   </Badge>
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Merchant: {profile?.display_name ?? "�"}
+                  Merchant: {profile?.display_name ?? "(no name)"}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-zinc-300">
@@ -91,7 +91,7 @@ export default function BusinessesQueuePage() {
                   <span>
                     Type:{" "}
                     <span className="text-zinc-300">
-                      {(rec.establishment_type as string) ?? "�"}
+                      {(rec.establishment_type as string) ?? "other"}
                     </span>
                   </span>
                   <span>

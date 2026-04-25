@@ -192,7 +192,7 @@ export default function TravelChallengeDetailPage({
       );
       return;
     }
-    toast.success("Template cloned � edit the child challenge as needed");
+    toast.success("Template cloned ? edit the child challenge as needed");
     await reload();
   }
 
@@ -221,17 +221,17 @@ export default function TravelChallengeDetailPage({
             </Badge>
           </div>
           <p className="text-zinc-400 mt-1">
-            {(rec.description as string) ?? "�"}
+            {(rec.description as string) ?? "--"}
           </p>
           <p className="text-xs text-zinc-500 mt-2">
             {(rec.completion_mode as string) === "any"
               ? "Completing any 1 challenge rewards the user."
               : "Completing all challenges unlocks the big reward."}
             {rec.date_range_start
-              ? ` � Runs ${rec.date_range_start} ? ${rec.date_range_end ?? "open"}`
+              ? ` ? Runs ${rec.date_range_start} ? ${rec.date_range_end ?? "open"}`
               : ""}
             {rec.max_total_completions
-              ? ` � Cap ${rec.current_total_completions as number}/${rec.max_total_completions as number}`
+              ? ` ? Cap ${rec.current_total_completions as number}/${rec.max_total_completions as number}`
               : ""}
           </p>
         </div>
@@ -638,7 +638,7 @@ export default function TravelChallengeDetailPage({
                       {cr.time_of_day_start
                         ? `${cr.time_of_day_start} ? ${cr.time_of_day_end as string}`
                         : "All day"}{" "}
-                      �{" "}
+                      ?{" "}
                       {cr.max_completions
                         ? `${cr.current_completions as number}/${cr.max_completions as number} used`
                         : "no cap"}

@@ -325,8 +325,8 @@ export default function TemplatesPage() {
                   {t.description as string}
                 </p>
                 <p className="text-xs text-zinc-500 mt-2">
-                  XP {t.suggested_xp as number} � Radius{" "}
-                  {t.suggested_radius_meters as number}m �{" "}
+                  XP {t.suggested_xp as number} ? Radius{" "}
+                  {t.suggested_radius_meters as number}m ?{" "}
                   {(t.verification_type as string) ?? "gps"}
                 </p>
               </div>

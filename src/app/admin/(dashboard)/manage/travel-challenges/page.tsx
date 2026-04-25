@@ -192,6 +192,6 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 function fmtDate(value: string | null): string {
-  if (!value) return "�";
+  if (!value) return "?";
   return new Date(value).toLocaleDateString();
 }

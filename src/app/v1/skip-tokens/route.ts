@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 
-/** GET /v1/skip-tokens � returns { free_skips_remaining, extra_skips, next_refill_at } */
+/** GET /v1/skip-tokens ? returns { free_skips_remaining, extra_skips, next_refill_at } */
 export async function GET(request: Request) {
   const { user, client, error } = await requireUser(request);
   if (error || !user)

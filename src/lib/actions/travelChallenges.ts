@@ -240,7 +240,7 @@ export async function addChildChallenge(
       return {
         error: {
           _form: [
-            `Challenge location is ${Math.round(dist)}m from your business � outside your ${biz.service_radius_meters}m service radius.`,
+            `Challenge location is ${Math.round(dist)}m from your business ? outside your ${biz.service_radius_meters}m service radius.`,
           ],
         },
       };
