@@ -191,7 +191,7 @@ export default function TravelChallengesPage() {
                 onChange={(e) =>
                   setForm({ ...form, max_total_completions: e.target.value })
                 }
-                placeholder="e.g. 100 � closes after that many redemptions"
+                placeholder="e.g. 100 ? closes after that many redemptions"
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
@@ -308,10 +308,10 @@ export default function TravelChallengesPage() {
                         </Badge>
                       </div>
                       <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
-                        {(rec.description as string) ?? "�"}
+                        {(rec.description as string) ?? "--"}
                       </p>
                       <p className="text-xs text-zinc-500 mt-2">
-                        {count} challenge{count === 1 ? "" : "s"} �{" "}
+                        {count} challenge{count === 1 ? "" : "s"} ?{" "}
                         {(rec.completion_mode as string) === "any"
                           ? "Any wins"
                           : "Complete all"}
