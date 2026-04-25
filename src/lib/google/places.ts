@@ -202,56 +202,89 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 3-layer quality filter
+// ---------------------------------------------------------------------------
+
 /**
- * Primary types Google returns for mundane micro-businesses that are not
- * interesting to travelers. Excluding them server-side means the API
- * never returns them so we don't waste response quota or confuse users.
+ * Layer 1 – allowlist.
+ *
+ * When no explicit EstablishmentType filter comes from the client we pass
+ * ONLY these types as `includedTypes` so Google never returns mundane
+ * micro-businesses in the first place. This is cheaper and more precise
+ * than maintaining a long excludedTypes list.
  */
-const EXCLUDED_NEARBY_TYPES = [
-  // Utilities / errands
-  "atm", "bank", "post_office", "courier_service",
-  "insurance_agency", "real_estate_agency", "accounting", "lawyer",
-  // Everyday retail that travelers don't seek out
-  "convenience_store", "grocery_store", "supermarket", "drugstore",
-  "hardware_store", "home_improvement_store", "furniture_store",
-  "clothing_store", "shoe_store", "jewelry_store",
-  // Health / personal care
-  "dentist", "doctor", "physiotherapist", "veterinary_care",
-  "hair_salon", "beauty_salon", "nail_salon", "barber_shop",
-  // Auto
-  "gas_station", "car_wash", "car_repair", "car_dealer",
-  // Misc boring
-  "laundry", "dry_cleaning", "storage", "moving_company",
-  "electrician", "plumber", "locksmith",
+const ALLOWED_NEARBY_TYPES = [
+  "restaurant",
+  "cafe",
+  "tourist_attraction",
+  "museum",
+  "lodging",
+  "park",
+  "bar",
+  "shopping_mall",
+  "art_gallery",
 ];
+
+/**
+ * Layer 2 – name-based exclusions (post-filter).
+ *
+ * Google has no server-side name filter, so we strip out local micro-stores
+ * by matching against common Filipino and generic informal-store keywords.
+ */
+const NAME_EXCLUSION_PATTERNS: RegExp[] = [
+  /sari[-\s]?sari/i,
+  /mini[-\s]?store/i,
+  /tindahan/i,
+  /\bpalengke\b/i,
+  /\bpabrika\b/i,
+  /\bcarinderia\b/i,
+];
+
+/** Layer 3 thresholds – minimum quality bar for any result to surface. */
+const QUALITY_MIN_REVIEWS = 5;
+const QUALITY_MIN_RATING = 3.8;
 
 /**
  * Runs a Google `places:searchNearby` request centered on a coordinate.
  *
- * Always ranks by POPULARITY so well-known landmarks, parks, and notable
- * venues surface ahead of whichever tiny shop happens to be closest.
- * A `minRatingCount` post-filter removes places that have too few reviews
- * to be considered notable (e.g. unlisted sari-sari stores that ended up
- * in Google's index but have no real user engagement).
+ * Three-layer quality filtering is applied to every response:
+ *
+ *   Layer 1 – allowlist: when no explicit type filter is provided we send
+ *             only travel-relevant `includedTypes` so Google never returns
+ *             mundane micro-businesses in the first place.
+ *
+ *   Layer 2 – name exclusions: strips common informal-store keywords
+ *             (sari-sari, mini store, tindahan …) that occasionally slip
+ *             through the type filter.
+ *
+ *   Layer 3 – quality gate: minimum reviews, rating, and photo presence
+ *             ensure only established, well-documented venues surface.
+ *
+ * @param minRatingCount  Override the Layer-3 review floor. Callers that
+ *                        want a stricter bar (e.g. trending = 20) can raise
+ *                        it; passing 0 disables the check entirely.
  */
 export async function googleNearby({
   latitude,
   longitude,
   radiusMeters = 5_000,
   types,
-  minRatingCount = 20,
+  minRatingCount = QUALITY_MIN_REVIEWS,
   maxResults = 20,
 }: {
   latitude: number;
   longitude: number;
   radiusMeters?: number;
   types?: EstablishmentType[];
-  /** Minimum number of Google reviews. Places below this are filtered out. */
+  /** Minimum number of Google reviews. Defaults to QUALITY_MIN_REVIEWS (5). */
   minRatingCount?: number;
   maxResults?: number;
 }): Promise<NormalizedPlace[]> {
   const key = apiKey();
-  const googleTypes = Array.from(
+
+  // Map caller-supplied EstablishmentType values to Google type strings.
+  const requestedGoogleTypes = Array.from(
     new Set(
       (types ?? []).map((t) => GOOGLE_TYPE_FOR_ESTABLISHMENT[t]).filter(Boolean),
     ),
@@ -259,8 +292,7 @@ export async function googleNearby({
 
   const body: Record<string, unknown> = {
     maxResultCount: Math.min(Math.max(maxResults, 1), 20),
-    // Always popularity — we never want "closest first" in a travel app
-    // because that surfaces unlisted micro-businesses over iconic venues.
+    // Always popularity — closest-first surfaces micro-businesses over icons.
     rankPreference: "POPULARITY",
     locationRestriction: {
       circle: {
@@ -270,12 +302,12 @@ export async function googleNearby({
     },
   };
 
-  if (googleTypes.length > 0) {
-    body.includedTypes = googleTypes;
+  if (requestedGoogleTypes.length > 0) {
+    // Client specified a type filter — honour it exactly.
+    body.includedTypes = requestedGoogleTypes;
   } else {
-    // When no explicit type filter is requested, exclude the boring
-    // everyday categories so only travel-relevant POIs are returned.
-    body.excludedTypes = EXCLUDED_NEARBY_TYPES;
+    // Layer 1: no filter → constrain to the travel-relevant allowlist.
+    body.includedTypes = ALLOWED_NEARBY_TYPES;
   }
 
   const response = await fetch(GOOGLE_NEARBY_URL, {
@@ -286,7 +318,6 @@ export async function googleNearby({
       "X-Goog-FieldMask": FIELD_MASK,
     },
     body: JSON.stringify(body),
-    // Vercel edge cache - 5m per query is enough for an MVP.
     next: { revalidate: 300 },
   });
 
@@ -296,15 +327,25 @@ export async function googleNearby({
       `google_places_new_http_${response.status}: ${text.slice(0, 200)}`,
     );
   }
+
   const json = (await response.json()) as GoogleNearbyResponseNew;
+
   return (json.places ?? [])
     .map(normalize)
+    // Keep only successfully normalized entries.
     .filter((p): p is NormalizedPlace => p !== null)
+    // Layer 2: strip informal-store names that slip through the type allowlist.
+    .filter((p) => !NAME_EXCLUSION_PATTERNS.some((rx) => rx.test(p.name)))
+    // Layer 3a: minimum review count.
     .filter((p) =>
       minRatingCount > 0
         ? (p.user_ratings_total ?? 0) >= minRatingCount
         : true,
-    );
+    )
+    // Layer 3b: minimum rating.
+    .filter((p) => (p.rating ?? 0) >= QUALITY_MIN_RATING)
+    // Layer 3c: must have at least one photo.
+    .filter((p) => p.image_url !== null);
 }
 
 interface GoogleSearchTextResponseNew {
