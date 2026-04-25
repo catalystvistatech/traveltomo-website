@@ -97,7 +97,7 @@ export async function listBusinessVerificationQueue() {
   const { data } = await admin
     .from("businesses")
     .select(
-      "id, merchant_id, name, address, city, establishment_type, latitude, longitude, verification_status, hours, service_radius_meters, contact_email, contact_phone, profiles:merchant_id(display_name)"
+      "id, merchant_id, name, address, city, establishment_type, latitude, longitude, verification_status, hours, service_radius_meters, contact_email, contact_phone, profiles!businesses_merchant_id_fkey(display_name)"
     )
     .in("verification_status", ["pending", "unsubmitted"])
     .order("updated_at", { ascending: false });
