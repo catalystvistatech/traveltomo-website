@@ -18,16 +18,6 @@ export async function listTemplates() {
   return data ?? [];
 }
 
-export async function getTemplate(id: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("challenge_templates")
-    .select("*")
-    .eq("id", id)
-    .single();
-  return data;
-}
-
 export async function createTemplate(input: unknown) {
   const parsed = templateSchema.safeParse(input);
   if (!parsed.success) {

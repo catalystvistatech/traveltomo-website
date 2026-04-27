@@ -15,16 +15,13 @@
  * API reference: https://developers.google.com/maps/documentation/places/web-service/nearby-search
  */
 
-export const GOOGLE_NEARBY_URL =
+const GOOGLE_NEARBY_URL =
   "https://places.googleapis.com/v1/places:searchNearby";
 
-/** Text search (New) — find establishments by name or address. */
-export const GOOGLE_SEARCH_TEXT_URL =
+const GOOGLE_SEARCH_TEXT_URL =
   "https://places.googleapis.com/v1/places:searchText";
 
-// The Places API (New) returns a photo resource name which we then turn
-// into a media URL the client can hit directly.
-export const GOOGLE_PHOTO_MEDIA = (name: string) =>
+const GOOGLE_PHOTO_MEDIA = (name: string) =>
   `https://places.googleapis.com/v1/${name}/media`;
 
 /** Types the mobile client filters by, mapped to Places API (New) types. */
@@ -123,19 +120,6 @@ function photoURL(
     key,
   });
   return `${GOOGLE_PHOTO_MEDIA(photoName)}?${qs.toString()}`;
-}
-
-/**
- * Larger photo URL intended for place detail screens. Exported so
- * `/v1/places/[id]` can request a higher-resolution image without
- * inflating list-card responses. Returns `null` when no photo name is
- * provided or the API key is missing.
- */
-export function detailPhotoURL(
-  photoName: string | undefined,
-  maxWidth = 1280,
-): string | null {
-  return photoURL(photoName, maxWidth);
 }
 
 function cityFromComponents(

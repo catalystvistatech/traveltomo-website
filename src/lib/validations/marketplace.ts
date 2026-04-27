@@ -58,7 +58,6 @@ export const templateSchema = z.object({
   cover_url: z.string().url().optional().or(z.literal("")),
   is_published: z.boolean().default(true),
 });
-export type TemplateInput = z.infer<typeof templateSchema>;
 
 const dayHoursSchema = z.object({
   open: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().or(z.literal("")),
@@ -116,7 +115,6 @@ export const travelChallengeSchema = z.object({
     .optional(),
   big_reward_discount_value: z.coerce.number().min(0).optional(),
 });
-export type TravelChallengeInput = z.infer<typeof travelChallengeSchema>;
 
 export const childChallengeSchema = z.object({
   title: z.string().min(3).max(120),
@@ -145,13 +143,11 @@ export const childChallengeSchema = z.object({
   reward_max_redemptions: z.coerce.number().int().positive().optional(),
   reward_expires_at: z.string().optional().or(z.literal("")),
 });
-export type ChildChallengeInput = z.infer<typeof childChallengeSchema>;
 
 export const subscriptionSchema = z.object({
   tier: z.enum(["basic", "featured", "premium"]),
   months: z.coerce.number().int().min(1).max(12).default(1),
 });
-export type SubscriptionInput = z.infer<typeof subscriptionSchema>;
 
 export const DEFAULT_HOURS: BusinessHoursInput = {
   monday: { open: "09:00", close: "22:00", closed: false },

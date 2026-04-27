@@ -2,10 +2,10 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/actions/auth";
+import { getCurrentUser, type UserRole } from "@/lib/actions/auth";
 import { revalidatePath } from "next/cache";
 
-export type UserRole = "user" | "merchant" | "admin" | "superadmin";
+export type { UserRole };
 
 export interface ManagedUser {
   id: string;

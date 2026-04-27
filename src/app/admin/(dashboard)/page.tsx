@@ -56,7 +56,7 @@ export default async function DashboardPage() {
         <Card className="bg-yellow-600/10 border-yellow-600/40">
           <CardContent className="py-4 text-sm text-yellow-200">
             Your merchant account is <b>pending admin verification</b>. Finish
-            your business profile and submit it ? challenges can&rsquo;t go
+            your business profile and submit it &mdash; challenges can&rsquo;t go
             live until an admin approves you.
           </CardContent>
         </Card>

@@ -6,7 +6,7 @@ import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
 
 export type UserRole = "user" | "merchant" | "admin" | "superadmin";
-export type MerchantRequestStatus =
+type MerchantRequestStatus =
   | "none"
   | "pending"
   | "approved"

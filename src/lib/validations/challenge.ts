@@ -44,18 +44,3 @@ export const rewardSchema = z.object({
   expires_at: z.string().optional(),
 });
 
-export const businessSchema = z.object({
-  name: z.string().min(2, "Business name is required").max(100),
-  description: z.string().max(500).optional(),
-  address: z.string().min(5, "Address is required").max(200),
-  city: z.string().min(2).max(100),
-  category: z.string().min(1, "Select a category"),
-  contact_email: z.string().email("Invalid email").optional().or(z.literal("")),
-  contact_phone: z.string().max(20).optional(),
-  website: z.string().url("Invalid URL").optional().or(z.literal("")),
-});
-
-export type ChallengeDetails = z.infer<typeof challengeDetailsSchema>;
-export type ChallengeVerification = z.infer<typeof challengeVerificationSchema>;
-export type RewardData = z.infer<typeof rewardSchema>;
-export type BusinessData = z.infer<typeof businessSchema>;
