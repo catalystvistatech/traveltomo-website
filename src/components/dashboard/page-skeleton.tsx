@@ -5,9 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
  *  - Next.js loading.tsx (server component pages)
  *  - "use client" pages during their initial data fetch
  *
- * variant="cards"  – stat-card grid (dashboard home, analytics)
- * variant="list"   – stacked card list (most CRUD pages)
- * variant="form"   – single centred content block (business profile, promote)
+ * variant="cards"  - stat-card grid (dashboard home, analytics)
+ * variant="list"   - stacked card list (most CRUD pages)
+ * variant="form"   - single centred content block (business profile, promote)
  */
 export function PageSkeleton({
   variant = "list",
