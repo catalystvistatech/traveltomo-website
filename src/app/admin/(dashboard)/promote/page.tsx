@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Crown, Star } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Sub = Awaited<ReturnType<typeof getActiveSubscription>>;
 type Row = Awaited<ReturnType<typeof listSubscriptionHistory>>[number];
@@ -67,16 +68,25 @@ const TIERS: {
 export default function PromotePage() {
   const [active, setActive] = useState<Sub | null>(null);
   const [history, setHistory] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
-    setActive(await getActiveSubscription());
-    setHistory(await listSubscriptionHistory());
+    setIsLoading(true);
+    const [sub, hist] = await Promise.all([
+      getActiveSubscription(),
+      listSubscriptionHistory(),
+    ]);
+    setActive(sub);
+    setHistory(hist);
+    setIsLoading(false);
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="form" />;
 
   function handleStart(tier: "basic" | "featured" | "premium") {
     startTransition(async () => {

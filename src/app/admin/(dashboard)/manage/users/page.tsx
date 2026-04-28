@@ -17,6 +17,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -167,6 +168,8 @@ export default function UsersPage() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  if (isLoading && users.length === 0) return <PageSkeleton variant="list" />;
 
   return (
     <div className="max-w-5xl space-y-6">

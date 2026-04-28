@@ -37,6 +37,7 @@ import {
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
 import { ArrowLeft, Plus, Trash2, FileStack, Send } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type TravelChallenge = NonNullable<
   Awaited<ReturnType<typeof getTravelChallenge>>
@@ -92,9 +93,7 @@ export default function TravelChallengeDetailPage({
     getBusiness().then((b) => setBiz(b as Record<string, unknown> | null));
   }, [id]);
 
-  if (!tc) {
-    return <div className="text-zinc-500">Loading...</div>;
-  }
+  if (!tc) return <PageSkeleton variant="list" />;
 
   const rec = tc as Record<string, unknown>;
   const children =

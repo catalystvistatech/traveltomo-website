@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Record<string, unknown> & {
   id: string;
@@ -28,24 +29,31 @@ type Row = Record<string, unknown> & {
 
 export default function ManageTravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
 
   async function reload() {
+    setIsLoading(true);
     const data = (await listTravelChallenges()) as unknown as Row[];
     setRows(data.filter((r) => r.status === "pending_review"));
+    setIsLoading(false);
   }
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
     listTravelChallenges().then((data) => {
       if (cancelled) return;
       setRows((data as unknown as Row[]).filter((r) => r.status === "pending_review"));
+      setIsLoading(false);
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   function handleReview(id: string, action: "approved" | "rejected") {
     startTransition(async () => {

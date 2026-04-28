@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
 
@@ -41,6 +42,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 export default function TravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -58,12 +60,16 @@ export default function TravelChallengesPage() {
   });
 
   async function reload() {
+    setIsLoading(true);
     setRows(await listTravelChallenges());
+    setIsLoading(false);
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   async function handleCreate() {
     setSaving(true);

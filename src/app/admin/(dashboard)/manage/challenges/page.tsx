@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Challenge = Record<string, unknown> & {
   id: string;
@@ -27,14 +28,18 @@ type Challenge = Record<string, unknown> & {
 
 export default function ManageChallengesPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
-    getAllChallenges("pending_review").then((data) =>
-      setChallenges(data as Challenge[])
-    );
+    getAllChallenges("pending_review").then((data) => {
+      setChallenges(data as Challenge[]);
+      setIsLoading(false);
+    });
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   async function handleReview(
     challengeId: string,
