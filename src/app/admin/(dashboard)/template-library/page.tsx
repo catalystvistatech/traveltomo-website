@@ -14,15 +14,22 @@ import {
   ESTABLISHMENT_LABELS,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Template = Awaited<ReturnType<typeof listPublishedTemplates>>[number];
 
 export default function TemplateLibraryPage() {
   const [list, setList] = useState<Template[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    listPublishedTemplates().then(setList);
+    listPublishedTemplates().then((data) => {
+      setList(data);
+      setIsLoading(false);
+    });
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   return (
     <div className="space-y-6">

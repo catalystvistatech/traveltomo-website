@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/auth";
 import { Users } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type ManagedProfile = {
   id: string;
@@ -27,10 +28,12 @@ const roleOptions: UserRole[] = ["user", "merchant", "admin", "superadmin"];
 
 export default function ManageMerchantsPage() {
   const [profilesList, setProfilesList] = useState<ManagedProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [viewerRole, setViewerRole] = useState<UserRole>("user");
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
 
   async function loadData() {
+    setIsLoading(true);
     const [viewer, managed] = await Promise.all([
       getCurrentUser(),
       getRoleManagementData(),
@@ -40,15 +43,17 @@ export default function ManageMerchantsPage() {
 
     if (managed.error) {
       toast.error(managed.error);
-      return;
+    } else {
+      setProfilesList((managed.data as ManagedProfile[]) ?? []);
     }
-
-    setProfilesList((managed.data as ManagedProfile[]) ?? []);
+    setIsLoading(false);
   }
 
   useEffect(() => {
     loadData();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   async function handleRoleChange(userId: string, role: UserRole) {
     setLoadingUserId(userId);

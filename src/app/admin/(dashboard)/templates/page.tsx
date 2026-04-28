@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2, Pencil, Plus } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type TemplateRow = Awaited<ReturnType<typeof listTemplates>>[number];
 
@@ -44,17 +45,22 @@ const empty = {
 
 export default function TemplatesPage() {
   const [list, setList] = useState<TemplateRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ ...empty });
   const [saving, setSaving] = useState(false);
 
   async function reload() {
+    setIsLoading(true);
     setList(await listTemplates());
+    setIsLoading(false);
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   function startNew() {
     setEditing("new");

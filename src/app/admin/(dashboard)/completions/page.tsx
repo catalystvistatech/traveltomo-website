@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listPendingCompletions>>[number];
 
@@ -28,16 +29,21 @@ const STATUS_CLASS: Record<string, string> = {
 
 export default function CompletionsPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [codeInput, setCodeInput] = useState("");
   const [pending, startTransition] = useTransition();
 
   async function reload() {
+    setIsLoading(true);
     setRows(await listPendingCompletions());
+    setIsLoading(false);
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   function handleVerify(id: string) {
     startTransition(async () => {

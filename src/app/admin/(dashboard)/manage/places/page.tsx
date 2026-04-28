@@ -5,6 +5,7 @@ import { getPlaces } from "@/lib/actions/challenges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin } from "lucide-react";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Place = {
   id: string;
@@ -23,6 +24,8 @@ export default function ManagePlacesPage() {
       setLoaded(true);
     });
   }, []);
+
+  if (!loaded) return <PageSkeleton variant="list" />;
 
   return (
     <div className="space-y-6">

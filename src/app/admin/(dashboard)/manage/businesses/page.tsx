@@ -15,20 +15,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listBusinessVerificationQueue>>[number];
 
 export default function BusinessesQueuePage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
+    setIsLoading(true);
     setRows(await listBusinessVerificationQueue());
+    setIsLoading(false);
   }
 
   useEffect(() => {
     reload();
   }, []);
+
+  if (isLoading) return <PageSkeleton variant="list" />;
 
   function handleDecision(
     id: string,

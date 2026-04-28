@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import {
   ESTABLISHMENT_LABELS,
   ESTABLISHMENT_TYPES,
@@ -73,6 +74,7 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 };
 
 export default function BusinessPage() {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("unsubmitted");
   const [form, setForm] = useState<ExtendedBusinessInput>({
@@ -94,6 +96,7 @@ export default function BusinessPage() {
 
   useEffect(() => {
     getBusiness().then((biz) => {
+      setInitialLoading(false);
       if (!biz) return;
       const rec = biz as Record<string, unknown>;
       setStatus((rec.verification_status as string) ?? "unsubmitted");
@@ -123,6 +126,8 @@ export default function BusinessPage() {
       });
     });
   }, []);
+
+  if (initialLoading) return <PageSkeleton variant="form" />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
