@@ -55,8 +55,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full platform architect
 
 | Repo | Description |
 |------|-------------|
-| `TravelTomo/` | iOS app (Swift/SwiftUI) |
-| `traveltomo-website/` | This repo (admin dashboard) |
+| [catalystvistatech/traveltomo-ios](https://github.com/catalystvistatech/traveltomo-ios) | iOS app (Swift/SwiftUI) — **canonical client remote** |
+| `traveltomo-website/` | This repo (admin dashboard + migrations) |
 | Android (future) | Kotlin/Compose app |
 
-All clients share the same Supabase backend.
+All clients share the same Supabase backend. For ownership and local vs remote checkouts, see [docs/CLIENT_REPOS.md](docs/CLIENT_REPOS.md).

@@ -1,6 +1,6 @@
 # TravelTomo Platform Architecture
 
-**Last updated:** 2026-04-22
+**Last updated:** 2026-04-29
 **Audience:** Any developer working on TravelTomo (iOS, web, future Android).
 
 ---
@@ -159,6 +159,8 @@ A new signup always gets `role = 'user'`. Promotion to `merchant` or `admin` is 
 
 ## 4. iOS App (Swift/SwiftUI)
 
+The canonical **client-owned** iOS repository is [catalystvistatech/traveltomo-ios](https://github.com/catalystvistatech/traveltomo-ios) (milestone 1 complete; product control lives with that remote). See [CLIENT_REPOS.md](CLIENT_REPOS.md) for repo ownership and how this relates to local checkouts.
+
 ### Stack
 
 | Layer | Technology |
@@ -216,7 +218,7 @@ The Android app must:
 - Submit `challenge_completions` and `reward_redemptions` with `user_id = auth.uid()`
 - Never bypass or duplicate RLS logic in application code
 
-No schema changes should be needed to support Android — the backend is client-agnostic.
+No schema changes should be needed to support Android ï¿½ the backend is client-agnostic.
 
 ---
 
@@ -272,3 +274,4 @@ When adding new migrations, create `002_description.sql`, `003_description.sql`,
 | 2026-04-22 | Dark theme (zinc-950) for dashboard | Light theme, auto theme | Matches TravelTomo iOS brand (black backgrounds) | Web |
 | 2026-04-19 | MapKit + bundled assets for iOS imagery | Google Places API | Zero cost, no 3rd-party disclosure, covers MVP scope | iOS |
 | 2026-04-19 | Hide Facebook auth behind feature flag | Delete or fully implement | 1-line re-enable vs reimplementation | iOS |
+| 2026-04-29 | iOS app source of truth at catalystvistatech/traveltomo-ios | Single monorepo, vendor-only remote | Client-owned repo after milestone 1; team control and clear handoff | iOS |
