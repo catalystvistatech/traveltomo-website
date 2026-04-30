@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use as unwrap } from "react";
+import { useCallback, useEffect, useRef, useState, use as unwrap } from "react";
 import Link from "next/link";
 import {
   getTravelChallenge,
@@ -36,8 +36,9 @@ import {
   WEEK_DAYS,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
-import { ArrowLeft, Plus, Trash2, FileStack, Send } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2 } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import type { PlacePrediction } from "@/components/business-location-picker";
 
 type TravelChallenge = NonNullable<
   Awaited<ReturnType<typeof getTravelChallenge>>
@@ -99,6 +100,8 @@ export default function TravelChallengeDetailPage({
   const children =
     ((rec.challenges as Record<string, unknown>[]) ?? []) ?? [];
   const status = rec.status as string;
+  const MAX_STOPS = 6;
+  const atStopLimit = children.length >= MAX_STOPS;
 
   function setDefaultsFromBiz() {
     if (biz) {
@@ -121,6 +124,72 @@ export default function TravelChallengeDetailPage({
       };
     });
   }
+
+  // --- Places search state for the stop picker ---
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
+  const [placeSearching, setPlaceSearching] = useState(false);
+  const [showPlaceResults, setShowPlaceResults] = useState(false);
+  const placeQueryRef = useRef(0);
+  const placeContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const trimmed = placeQuery.trim();
+    const reqId = ++placeQueryRef.current;
+    if (trimmed.length < 2) {
+      queueMicrotask(() => {
+        if (reqId !== placeQueryRef.current) return;
+        setPlacePredictions([]);
+      });
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setPlaceSearching(true);
+      try {
+        const params = new URLSearchParams({ q: trimmed });
+        if (biz?.latitude != null && biz?.longitude != null) {
+          params.set("lat", String(biz.latitude));
+          params.set("lng", String(biz.longitude));
+        }
+        const res = await fetch(`/v1/places/autocomplete?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { data?: PlacePrediction[] };
+        if (reqId !== placeQueryRef.current) return;
+        setPlacePredictions(json.data ?? []);
+        setShowPlaceResults(true);
+      } catch {
+        if (reqId !== placeQueryRef.current) return;
+        setPlacePredictions([]);
+      } finally {
+        if (reqId === placeQueryRef.current) setPlaceSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [placeQuery, biz]);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (placeContainerRef.current && !placeContainerRef.current.contains(e.target as Node))
+        setShowPlaceResults(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const handleSelectPlace = useCallback(
+    (p: PlacePrediction) => {
+      setChild((c) => ({
+        ...c,
+        title: c.title || p.name,
+        latitude: String(p.lat),
+        longitude: String(p.lng),
+      }));
+      setPlaceQuery("");
+      setShowPlaceResults(false);
+      setPlacePredictions([]);
+    },
+    []
+  );
 
   async function handleAddChild() {
     setSaving(true);
@@ -164,7 +233,7 @@ export default function TravelChallengeDetailPage({
     const r = await submitTravelChallengeForReview(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Submitted for review");
+      toast.success("Travel challenge is now live!");
       await reload();
     }
   }
@@ -239,21 +308,25 @@ export default function TravelChallengeDetailPage({
             onClick={handleSubmit}
             className="bg-green-600 hover:bg-green-700 text-white gap-2"
           >
-            <Send className="h-4 w-4" /> Submit for Review
+            <Send className="h-4 w-4" /> Publish
           </Button>
         )}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <Button
           onClick={() => {
             setShowChild((v) => !v);
             setDefaultsFromBiz();
           }}
+          disabled={atStopLimit}
           className="bg-red-600 hover:bg-red-700 text-white gap-2"
         >
-          <Plus className="h-4 w-4" /> Add Challenge
+          <Plus className="h-4 w-4" /> Add Stop
         </Button>
+        <span className="text-xs text-zinc-500">
+          {children.length}/{MAX_STOPS} stops
+        </span>
         <Button
           variant="outline"
           onClick={() => setShowTemplates((v) => !v)}
@@ -313,6 +386,56 @@ export default function TravelChallengeDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* --- Location search --- */}
+            <div className="space-y-2" ref={placeContainerRef}>
+              <Label className="text-zinc-300">Search for a location *</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Input
+                  value={placeQuery}
+                  onChange={(e) => setPlaceQuery(e.target.value)}
+                  onFocus={() => {
+                    if (placePredictions.length > 0) setShowPlaceResults(true);
+                  }}
+                  placeholder="e.g. Jollibee, Boracay Beach..."
+                  className="bg-zinc-800 border-zinc-700 text-white pl-9 h-10"
+                  autoComplete="off"
+                />
+                {placeSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-500" />
+                )}
+              </div>
+              {showPlaceResults && placePredictions.length > 0 && (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900 shadow-lg overflow-hidden z-50 relative">
+                  {placePredictions.map((p) => (
+                    <button
+                      key={p.placeId}
+                      type="button"
+                      onClick={() => handleSelectPlace(p)}
+                      className="flex w-full items-start gap-3 px-3 py-2 text-left transition-colors hover:bg-zinc-800"
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-white">
+                          {p.name}
+                        </div>
+                        {p.address && (
+                          <div className="truncate text-xs text-zinc-400">
+                            {p.address}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {child.latitude && child.longitude && (
+                <p className="text-xs text-zinc-400">
+                  📍 {parseFloat(child.latitude).toFixed(5)}, {parseFloat(child.longitude).toFixed(5)}
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Title *</Label>
@@ -359,45 +482,20 @@ export default function TravelChallengeDetailPage({
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Latitude *</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={child.latitude}
-                  onChange={(e) =>
-                    setChild({ ...child, latitude: e.target.value })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Longitude *</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={child.longitude}
-                  onChange={(e) =>
-                    setChild({ ...child, longitude: e.target.value })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Radius (m)</Label>
-                <Input
-                  type="number"
-                  value={child.radius_meters}
-                  onChange={(e) =>
-                    setChild({
-                      ...child,
-                      radius_meters: parseInt(e.target.value || "0"),
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Radius (m)</Label>
+              <Input
+                type="number"
+                value={child.radius_meters}
+                onChange={(e) =>
+                  setChild({
+                    ...child,
+                    radius_meters: parseInt(e.target.value || "0"),
+                  })
+                }
+                placeholder="50"
+                className="bg-zinc-800 border-zinc-700 text-white max-w-xs"
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">

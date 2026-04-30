@@ -163,14 +163,23 @@ export async function submitTravelChallengeForReview(id: string) {
   if ("error" in gate) return { error: gate.error };
 
   const supabase = await createClient();
+  const now = new Date().toISOString();
+
   const { error } = await supabase
     .from("travel_challenges")
     .update({
-      status: "pending_review",
-      submitted_at: new Date().toISOString(),
+      status: "live",
+      submitted_at: now,
+      approved_at: now,
     })
     .eq("id", id);
   if (error) return { error: error.message };
+
+  await supabase
+    .from("challenges")
+    .update({ status: "live", approved_at: now })
+    .eq("travel_challenge_id", id);
+
   revalidatePath(`/admin/travel-challenges/${id}`);
   return { success: true };
 }
@@ -225,6 +234,14 @@ export async function addChildChallenge(
   if (!parent) return { error: { _form: ["Travel challenge not found"] } };
   if (parent.merchant_id !== gate.user.id && gate.user.role === "merchant") {
     return { error: { _form: ["You don't own this travel challenge"] } };
+  }
+
+  const { count } = await supabase
+    .from("challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("travel_challenge_id", travelChallengeId);
+  if ((count ?? 0) >= 6) {
+    return { error: { _form: ["Maximum 6 stops per travel challenge."] } };
   }
 
   const biz = await getApprovedBusiness(parent.merchant_id);
@@ -309,6 +326,34 @@ export async function removeChildChallenge(childId: string) {
     .eq("id", childId);
   if (error) return { error: error.message };
   return { success: true };
+}
+
+export async function uploadTravelChallengeCover(formData: FormData) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "No file provided" };
+  if (file.size > 5 * 1024 * 1024) return { error: "File must be under 5MB" };
+  if (!file.type.startsWith("image/"))
+    return { error: "Only image files are allowed" };
+
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `travel-challenges/${gate.user.id}/${randomUUID()}.${ext}`;
+
+  const admin = createAdminClient();
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { error } = await admin.storage
+    .from("public-assets")
+    .upload(path, buffer, { contentType: file.type, upsert: true });
+
+  if (error) return { error: error.message };
+
+  const { data: urlData } = admin.storage
+    .from("public-assets")
+    .getPublicUrl(path);
+
+  return { success: true, url: urlData.publicUrl };
 }
 
 export async function cloneTemplateIntoTravelChallenge(

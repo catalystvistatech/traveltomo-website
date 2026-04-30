@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   listTravelChallenges,
   createTravelChallenge,
+  uploadTravelChallengeCover,
 } from "@/lib/actions/travelChallenges";
 import {
   Card,
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, ImagePlus, X } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
@@ -45,6 +46,8 @@ export default function TravelChallengesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -70,6 +73,23 @@ export default function TravelChallengesPage() {
   }, []);
 
   if (isLoading) return <PageSkeleton variant="list" />;
+
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await uploadTravelChallengeCover(fd);
+    setUploading(false);
+    if ("error" in r) {
+      toast.error(r.error as string);
+      return;
+    }
+    const url = (r as { url: string }).url;
+    setForm((f) => ({ ...f, cover_url: url }));
+    setCoverPreview(URL.createObjectURL(file));
+  }
 
   async function handleCreate() {
     setSaving(true);
@@ -140,6 +160,50 @@ export default function TravelChallengesPage() {
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Header Photo</Label>
+              {coverPreview || form.cover_url ? (
+                <div className="relative w-full h-40 rounded-lg overflow-hidden border border-zinc-700">
+                  <img
+                    src={coverPreview ?? form.cover_url}
+                    alt="Cover"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, cover_url: "" }));
+                      setCoverPreview(null);
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 h-40 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 cursor-pointer transition-colors">
+                  {uploading ? (
+                    <p className="text-sm text-zinc-400">Uploading...</p>
+                  ) : (
+                    <>
+                      <ImagePlus className="h-8 w-8 text-zinc-500" />
+                      <p className="text-sm text-zinc-400">
+                        Click to upload a cover image
+                      </p>
+                      <p className="text-xs text-zinc-600">Max 5 MB</p>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCoverUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                </label>
+              )}
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Completion Mode</Label>

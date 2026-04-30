@@ -2,18 +2,22 @@ import { NextResponse } from "next/server";
 import { createApiClient } from "@/lib/supabase/api";
 
 /**
- * GET /v1/travel-challenges?lat=..&lng=..&limit=20
+ * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&radius_km=50
  *
  * Returns live travel challenges near a given coordinate, ranked by the
- * distance from their primary business. Used by the iOS Home screen and
- * the PlaceChallengesView to populate the "Travel Challenges" section
- * with real merchant-created content.
+ * distance from their primary business. Challenges beyond `radius_km`
+ * are excluded so users only see relevant nearby content.
+ *
+ * Supports cursor-based pagination via `offset` + `limit`.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const lat = parseFloat(searchParams.get("lat") ?? "");
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
+  const offset = Math.max(parseInt(searchParams.get("offset") ?? "0") || 0, 0);
+  const radiusKm = parseFloat(searchParams.get("radius_km") ?? "50");
+  const radiusMeters = radiusKm * 1000;
 
   const supabase = createApiClient(request);
 
@@ -90,15 +94,27 @@ export async function GET(request: Request) {
     };
   });
 
-  ranked.sort((a, b) => {
+  // Filter out challenges beyond the radius when coordinates are provided.
+  const filtered = hasCoord
+    ? ranked.filter(
+        (r) => r.distance_meters != null && r.distance_meters <= radiusMeters
+      )
+    : ranked;
+
+  filtered.sort((a, b) => {
     const da = a.distance_meters ?? Number.POSITIVE_INFINITY;
     const db = b.distance_meters ?? Number.POSITIVE_INFINITY;
     return da - db;
   });
 
-  const trimmed = ranked.slice(0, limit);
+  const page = filtered.slice(offset, offset + limit);
 
-  return NextResponse.json({ data: trimmed, count: trimmed.length });
+  return NextResponse.json({
+    data: page,
+    count: page.length,
+    total: filtered.length,
+    has_more: offset + limit < filtered.length,
+  });
 }
 
 function haversine(
