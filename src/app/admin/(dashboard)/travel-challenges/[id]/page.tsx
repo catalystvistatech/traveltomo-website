@@ -84,6 +84,14 @@ export default function TravelChallengeDetailPage({
   const [child, setChild] = useState({ ...emptyChild });
   const [saving, setSaving] = useState(false);
 
+  // --- Places search state (must be before any early return) ---
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
+  const [placeSearching, setPlaceSearching] = useState(false);
+  const [showPlaceResults, setShowPlaceResults] = useState(false);
+  const placeQueryRef = useRef(0);
+  const placeContainerRef = useRef<HTMLDivElement>(null);
+
   async function reload() {
     setTc((await getTravelChallenge(id)) as TravelChallenge);
   }
@@ -93,45 +101,6 @@ export default function TravelChallengeDetailPage({
     listPublishedTemplates().then(setTemplates);
     getBusiness().then((b) => setBiz(b as Record<string, unknown> | null));
   }, [id]);
-
-  if (!tc) return <PageSkeleton variant="list" />;
-
-  const rec = tc as Record<string, unknown>;
-  const children =
-    ((rec.challenges as Record<string, unknown>[]) ?? []) ?? [];
-  const status = rec.status as string;
-  const MAX_STOPS = 6;
-  const atStopLimit = children.length >= MAX_STOPS;
-
-  function setDefaultsFromBiz() {
-    if (biz) {
-      setChild((c) => ({
-        ...c,
-        latitude: String(biz.latitude ?? ""),
-        longitude: String(biz.longitude ?? ""),
-      }));
-    }
-  }
-
-  function toggleDay(day: number) {
-    setChild((c) => {
-      const exists = c.days_of_week.includes(day);
-      return {
-        ...c,
-        days_of_week: exists
-          ? c.days_of_week.filter((d) => d !== day)
-          : [...c.days_of_week, day].sort(),
-      };
-    });
-  }
-
-  // --- Places search state for the stop picker ---
-  const [placeQuery, setPlaceQuery] = useState("");
-  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
-  const [placeSearching, setPlaceSearching] = useState(false);
-  const [showPlaceResults, setShowPlaceResults] = useState(false);
-  const placeQueryRef = useRef(0);
-  const placeContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const trimmed = placeQuery.trim();
@@ -190,6 +159,37 @@ export default function TravelChallengeDetailPage({
     },
     []
   );
+
+  if (!tc) return <PageSkeleton variant="list" />;
+
+  const rec = tc as Record<string, unknown>;
+  const children =
+    ((rec.challenges as Record<string, unknown>[]) ?? []) ?? [];
+  const status = rec.status as string;
+  const MAX_STOPS = 6;
+  const atStopLimit = children.length >= MAX_STOPS;
+
+  function setDefaultsFromBiz() {
+    if (biz) {
+      setChild((c) => ({
+        ...c,
+        latitude: String(biz.latitude ?? ""),
+        longitude: String(biz.longitude ?? ""),
+      }));
+    }
+  }
+
+  function toggleDay(day: number) {
+    setChild((c) => {
+      const exists = c.days_of_week.includes(day);
+      return {
+        ...c,
+        days_of_week: exists
+          ? c.days_of_week.filter((d) => d !== day)
+          : [...c.days_of_week, day].sort(),
+      };
+    });
+  }
 
   async function handleAddChild() {
     setSaving(true);
