@@ -39,6 +39,9 @@ import {
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2 } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import type { PlacePrediction } from "@/components/business-location-picker";
+import { APIProvider, Map, Marker } from "@vis.gl/react-google-maps";
+
+const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
 
 type TravelChallenge = NonNullable<
   Awaited<ReturnType<typeof getTravelChallenge>>
@@ -190,6 +193,18 @@ export default function TravelChallengeDetailPage({
       };
     });
   }
+
+  const hasPin =
+    child.latitude !== "" &&
+    child.longitude !== "" &&
+    Number.isFinite(parseFloat(child.latitude)) &&
+    Number.isFinite(parseFloat(child.longitude));
+
+  const mapCenter = hasPin
+    ? { lat: parseFloat(child.latitude), lng: parseFloat(child.longitude) }
+    : biz?.latitude != null && biz?.longitude != null
+      ? { lat: Number(biz.latitude), lng: Number(biz.longitude) }
+      : { lat: 15.1449, lng: 120.5887 }; // Angeles City default
 
   async function handleAddChild() {
     setSaving(true);
@@ -435,6 +450,57 @@ export default function TravelChallengeDetailPage({
                 </p>
               )}
             </div>
+
+            {/* --- Interactive map --- */}
+            <div className="overflow-hidden rounded-lg border border-zinc-800">
+              {MAPS_KEY ? (
+                <APIProvider apiKey={MAPS_KEY}>
+                  <Map
+                    style={{ width: "100%", height: 300 }}
+                    defaultCenter={mapCenter}
+                    center={mapCenter}
+                    defaultZoom={hasPin ? 16 : 13}
+                    zoom={hasPin ? 16 : 13}
+                    gestureHandling="greedy"
+                    disableDefaultUI={false}
+                    colorScheme="DARK"
+                    onClick={(e) => {
+                      if (e.detail.latLng) {
+                        setChild((c) => ({
+                          ...c,
+                          latitude: String(e.detail.latLng!.lat),
+                          longitude: String(e.detail.latLng!.lng),
+                        }));
+                      }
+                    }}
+                  >
+                    {hasPin && (
+                      <Marker
+                        position={{ lat: parseFloat(child.latitude), lng: parseFloat(child.longitude) }}
+                        draggable
+                        onDragEnd={(e) => {
+                          if (e.latLng) {
+                            setChild((c) => ({
+                              ...c,
+                              latitude: String(e.latLng!.lat()),
+                              longitude: String(e.latLng!.lng()),
+                            }));
+                          }
+                        }}
+                      />
+                    )}
+                  </Map>
+                </APIProvider>
+              ) : (
+                <div className="flex h-[300px] flex-col items-center justify-center gap-2 bg-zinc-800 text-zinc-400">
+                  <MapPin className="h-6 w-6 text-red-400" />
+                  <p className="text-xs">
+                    Add <code className="rounded bg-zinc-700 px-1">NEXT_PUBLIC_GOOGLE_MAPS_KEY</code> to see the map
+                  </p>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-zinc-500">Click anywhere on the map to place a pin, or drag the marker to adjust.</p>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
