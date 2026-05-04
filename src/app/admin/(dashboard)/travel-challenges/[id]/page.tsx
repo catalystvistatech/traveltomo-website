@@ -688,21 +688,6 @@ export default function TravelChallengeDetailPage({
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-zinc-300">Radius (m)</Label>
-              <Input
-                type="number"
-                value={child.radius_meters}
-                onChange={(e) =>
-                  setChild({
-                    ...child,
-                    radius_meters: parseInt(e.target.value || "0"),
-                  })
-                }
-                placeholder="50"
-                className="bg-zinc-800 border-zinc-700 text-white max-w-xs"
-              />
-            </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Opens at</Label>
@@ -811,13 +796,20 @@ export default function TravelChallengeDetailPage({
                 <Label className="text-zinc-300">Verification</Label>
                 <Select
                   value={child.verification_type}
-                  onValueChange={(v: string | null) =>
-                    v &&
+                  onValueChange={(v: string | null) => {
+                    if (!v) return;
+                    const radiusByType: Record<string, number> = {
+                      gps: 50,
+                      qr_scan: 50,
+                      photo_upload: 100,
+                      quiz_answer: 500,
+                    };
                     setChild({
                       ...child,
                       verification_type: v as typeof child.verification_type,
-                    })
-                  }
+                      radius_meters: radiusByType[v] ?? 50,
+                    });
+                  }}
                 >
                   <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
                     <SelectValue />
