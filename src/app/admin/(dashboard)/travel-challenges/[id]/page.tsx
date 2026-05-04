@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, use as unwrap } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   getTravelChallenge,
   addChildChallenge,
   removeChildChallenge,
+  updateTravelChallenge,
+  deleteTravelChallenge,
   submitTravelChallengeForReview,
   cloneTemplateIntoTravelChallenge,
 } from "@/lib/actions/travelChallenges";
@@ -36,7 +39,7 @@ import {
   WEEK_DAYS,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
-import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import type { PlacePrediction } from "@/components/business-location-picker";
 import { APIProvider, Map, Marker } from "@vis.gl/react-google-maps";
@@ -79,6 +82,7 @@ export default function TravelChallengeDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = unwrap(params);
+  const router = useRouter();
   const [tc, setTc] = useState<TravelChallenge | null>(null);
   const [showChild, setShowChild] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -86,6 +90,21 @@ export default function TravelChallengeDetailPage({
   const [biz, setBiz] = useState<Record<string, unknown> | null>(null);
   const [child, setChild] = useState({ ...emptyChild });
   const [saving, setSaving] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    cover_url: "",
+    completion_mode: "any" as "any" | "all",
+    date_range_start: "",
+    date_range_end: "",
+    max_total_completions: "",
+    big_reward_title: "",
+    big_reward_description: "",
+    big_reward_discount_type: "" as "" | "percentage" | "fixed" | "freebie",
+    big_reward_discount_value: "",
+  });
 
   // --- Places search state (must be before any early return) ---
   const [placeQuery, setPlaceQuery] = useState("");
@@ -163,6 +182,13 @@ export default function TravelChallengeDetailPage({
     []
   );
 
+  function formatActionError(err: Record<string, unknown>): string {
+    if ("_form" in err) return (err._form as string[])[0];
+    return Object.entries(err)
+      .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+      .join(" · ") || "Validation failed";
+  }
+
   if (!tc) return <PageSkeleton variant="list" />;
 
   const rec = tc as Record<string, unknown>;
@@ -222,10 +248,7 @@ export default function TravelChallengeDetailPage({
     const r = await addChildChallenge(id, payload);
     setSaving(false);
     if ("error" in r) {
-      const err = r.error as Record<string, unknown>;
-      toast.error(
-        "_form" in err ? (err._form as string[])[0] : "Validation failed"
-      );
+      toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
     toast.success("Challenge added");
@@ -253,6 +276,51 @@ export default function TravelChallengeDetailPage({
     }
   }
 
+  function handleOpenEdit() {
+    const r = tc as Record<string, unknown>;
+    setEditForm({
+      title: (r.title as string) ?? "",
+      description: (r.description as string) ?? "",
+      cover_url: (r.cover_url as string) ?? "",
+      completion_mode: ((r.completion_mode as string) ?? "any") as "any" | "all",
+      date_range_start: (r.date_range_start as string) ?? "",
+      date_range_end: (r.date_range_end as string) ?? "",
+      max_total_completions: r.max_total_completions != null ? String(r.max_total_completions) : "",
+      big_reward_title: (r.big_reward_title as string) ?? "",
+      big_reward_description: (r.big_reward_description as string) ?? "",
+      big_reward_discount_type: ((r.big_reward_discount_type as string) ?? "") as typeof editForm.big_reward_discount_type,
+      big_reward_discount_value: r.big_reward_discount_value != null ? String(r.big_reward_discount_value) : "",
+    });
+    setShowEdit(true);
+  }
+
+  async function handleSaveEdit() {
+    setEditSaving(true);
+    const payload = {
+      ...editForm,
+      max_total_completions: editForm.max_total_completions ? parseInt(editForm.max_total_completions) : undefined,
+      big_reward_discount_value: editForm.big_reward_discount_value ? parseFloat(editForm.big_reward_discount_value) : undefined,
+      big_reward_discount_type: editForm.big_reward_discount_type || undefined,
+    };
+    const r = await updateTravelChallenge(id, payload);
+    setEditSaving(false);
+    if ("error" in r) {
+      toast.error(formatActionError(r.error as Record<string, unknown>));
+      return;
+    }
+    toast.success("Travel challenge updated");
+    setShowEdit(false);
+    await reload();
+  }
+
+  async function handleDeleteTC() {
+    if (!confirm(`Delete "${(tc as Record<string, unknown>).title}"? All stops will also be deleted. This cannot be undone.`)) return;
+    const r = await deleteTravelChallenge(id);
+    if ("error" in r) { toast.error(r.error as string); return; }
+    toast.success("Travel challenge deleted");
+    router.push("/admin/travel-challenges");
+  }
+
   async function handleClone(templateId: string) {
     if (!biz || biz.latitude == null || biz.longitude == null) {
       toast.error("Set business latitude/longitude first");
@@ -269,10 +337,7 @@ export default function TravelChallengeDetailPage({
       reward_discount_value: 10,
     });
     if ("error" in r) {
-      const err = r.error as Record<string, unknown>;
-      toast.error(
-        "_form" in err ? (err._form as string[])[0] : "Clone failed"
-      );
+      toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
     toast.success("Template cloned ? edit the child challenge as needed");
@@ -311,22 +376,97 @@ export default function TravelChallengeDetailPage({
               ? "Completing any 1 challenge rewards the user."
               : "Completing all challenges unlocks the big reward."}
             {rec.date_range_start
-              ? ` ? Runs ${rec.date_range_start} ? ${rec.date_range_end ?? "open"}`
+              ? ` · Runs ${rec.date_range_start} – ${rec.date_range_end ?? "open"}`
               : ""}
             {rec.max_total_completions
-              ? ` ? Cap ${rec.current_total_completions as number}/${rec.max_total_completions as number}`
+              ? ` · Cap ${rec.current_total_completions as number}/${rec.max_total_completions as number}`
               : ""}
           </p>
         </div>
-        {(status === "draft" || status === "rejected") && (
+        <div className="flex items-center gap-2 shrink-0">
           <Button
-            onClick={handleSubmit}
-            className="bg-green-600 hover:bg-green-700 text-white gap-2"
+            variant="outline"
+            onClick={handleOpenEdit}
+            className="border-zinc-700 text-zinc-200 gap-2"
           >
-            <Send className="h-4 w-4" /> Publish
+            <Pencil className="h-4 w-4" /> Edit
           </Button>
-        )}
+          <Button
+            variant="ghost"
+            onClick={handleDeleteTC}
+            className="text-zinc-400 hover:text-red-400 hover:bg-zinc-800 gap-2"
+          >
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+          {(status === "draft" || status === "rejected") && (
+            <Button
+              onClick={handleSubmit}
+              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+            >
+              <Send className="h-4 w-4" /> Publish
+            </Button>
+          )}
+        </div>
       </div>
+
+      {showEdit && (
+        <Card className="bg-zinc-900 border-zinc-700">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-white text-base">Edit Travel Challenge</CardTitle>
+            <button type="button" onClick={() => setShowEdit(false)} className="text-zinc-500 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Title *</Label>
+                <Input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Completion Mode</Label>
+                <Select value={editForm.completion_mode} onValueChange={(v: string | null) => v && setEditForm({ ...editForm, completion_mode: v as "any" | "all" })}>
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any (1 done = rewarded)</SelectItem>
+                    <SelectItem value="all">All (full set only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Description</Label>
+              <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Start Date</Label>
+                <Input type="date" value={editForm.date_range_start} onChange={(e) => setEditForm({ ...editForm, date_range_start: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">End Date</Label>
+                <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Big Reward Title</Label>
+                <Input value={editForm.big_reward_title} onChange={(e) => setEditForm({ ...editForm, big_reward_title: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Max Completions</Label>
+                <Input type="number" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} placeholder="Unlimited" className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSaveEdit} disabled={editSaving} className="bg-red-600 hover:bg-red-700 text-white">
+                {editSaving ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowEdit(false)} className="text-zinc-400">Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex gap-3 items-center">
         <Button

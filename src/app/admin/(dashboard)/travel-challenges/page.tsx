@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   listTravelChallenges,
   createTravelChallenge,
+  deleteTravelChallenge,
   uploadTravelChallengeCover,
 } from "@/lib/actions/travelChallenges";
 import {
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, ImagePlus, X } from "lucide-react";
+import { Plus, ImagePlus, X, Trash2 } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
@@ -91,6 +92,13 @@ export default function TravelChallengesPage() {
     setCoverPreview(URL.createObjectURL(file));
   }
 
+  function formatActionError(err: Record<string, unknown>): string {
+    if ("_form" in err) return (err._form as string[])[0];
+    return Object.entries(err)
+      .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+      .join(" · ") || "Validation failed";
+  }
+
   async function handleCreate() {
     setSaving(true);
     const payload = {
@@ -106,15 +114,22 @@ export default function TravelChallengesPage() {
     const r = await createTravelChallenge(payload);
     setSaving(false);
     if ("error" in r) {
-      const err = r.error as Record<string, unknown>;
-      toast.error(
-        "_form" in err ? (err._form as string[])[0] : "Validation failed"
-      );
+      toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
     toast.success("Travel challenge created");
     setShowNew(false);
     await reload();
+  }
+
+  async function handleDelete(id: string, title: string) {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    const r = await deleteTravelChallenge(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Travel challenge deleted");
+      await reload();
+    }
   }
 
   return (
@@ -358,39 +373,50 @@ export default function TravelChallengesPage() {
             ?.count ?? 0;
           const status = rec.status as string;
           return (
-            <Link
-              key={rec.id as string}
-              href={`/admin/travel-challenges/${rec.id}`}
-            >
-              <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer">
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white">
-                          {rec.title as string}
-                        </h3>
-                        <Badge
-                          variant="outline"
-                          className={STATUS_CLASS[status] ?? STATUS_CLASS.draft}
-                        >
-                          {status.replace("_", " ")}
-                        </Badge>
+            <div key={rec.id as string} className="relative group">
+              <Link href={`/admin/travel-challenges/${rec.id}`}>
+                <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-white">
+                            {rec.title as string}
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className={STATUS_CLASS[status] ?? STATUS_CLASS.draft}
+                          >
+                            {status.replace("_", " ")}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
+                          {(rec.description as string) ?? "--"}
+                        </p>
+                        <p className="text-xs text-zinc-500 mt-2">
+                          {count} challenge{count === 1 ? "" : "s"} ·{" "}
+                          {(rec.completion_mode as string) === "any"
+                            ? "Any wins"
+                            : "Complete all"}
+                        </p>
                       </div>
-                      <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
-                        {(rec.description as string) ?? "--"}
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-2">
-                        {count} challenge{count === 1 ? "" : "s"} ?{" "}
-                        {(rec.completion_mode as string) === "any"
-                          ? "Any wins"
-                          : "Complete all"}
-                      </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+                  </CardContent>
+                </Card>
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDelete(rec.id as string, rec.title as string);
+                }}
+                className="absolute top-3 right-3 p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
+                title="Delete travel challenge"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           );
         })}
         {rows.length === 0 && (
