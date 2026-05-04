@@ -316,6 +316,19 @@ export async function addChildChallenge(
   return { success: true, id: ch.id };
 }
 
+export async function deleteTravelChallenge(id: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+
+  const supabase = await createClient();
+  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+  const query = supabase.from("travel_challenges").delete().eq("id", id);
+  const { error } = await (isAdmin ? query : query.eq("merchant_id", gate.user.id));
+  if (error) return { error: error.message };
+  revalidatePath("/admin/travel-challenges");
+  return { success: true };
+}
+
 export async function removeChildChallenge(childId: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
