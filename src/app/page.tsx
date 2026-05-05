@@ -80,7 +80,7 @@ function Hero() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
               Explore the Philippines
               <br />
-              <span className="text-red-500">like a game.</span>
+              <span style={{ color: "#FCA581" }}>like a game.</span>
             </h1>
 
             <p className="max-w-lg text-base md:text-lg text-zinc-400 leading-relaxed mb-8">
