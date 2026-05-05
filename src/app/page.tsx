@@ -271,39 +271,42 @@ function ForMerchants() {
   ];
 
   return (
-    <section id="merchants" className="py-24 bg-red-600">
-      <div className="mx-auto max-w-6xl px-6">
+    <section id="merchants" className="relative py-24 overflow-hidden bg-zinc-900">
+      {/* Subtle red glow in the background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-900/30 via-zinc-900 to-zinc-900 pointer-events-none" />
+
+      <div className="relative mx-auto max-w-6xl px-6">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           {/* Left copy */}
           <div>
-            <p className="text-red-200 font-medium text-sm mb-3">
+            <p className="text-red-400 font-medium text-sm mb-3">
               For Businesses
             </p>
             <h2 className="text-3xl md:text-4xl font-bold mb-6 text-white">
               Drive foot traffic with gamified challenges.
             </h2>
-            <p className="text-red-100/80 leading-relaxed mb-8">
+            <p className="text-zinc-400 leading-relaxed mb-8">
               Create challenges that bring travelers to your door. Set up
               QR-based rewards, track redemptions, and watch your business
               grow — all from the TravelTomo merchant dashboard.
             </p>
-            <ul className="space-y-3 text-sm text-white/90 mb-8">
+            <ul className="space-y-3 text-sm text-zinc-300 mb-8">
               {checklist.map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 shrink-0 text-white mt-0.5" />
+                  <CheckCircle2 className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
                   {item}
                 </li>
               ))}
             </ul>
             <div className="flex items-center gap-4">
               <Link href="/admin/register">
-                <Button className="bg-white text-red-600 hover:bg-zinc-100 font-semibold rounded-full px-6">
+                <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full px-6">
                   Register as a Merchant
                 </Button>
               </Link>
               <Link
                 href="/admin/register"
-                className="text-sm text-white/80 underline underline-offset-4 hover:text-white"
+                className="text-sm text-zinc-400 underline underline-offset-4 hover:text-white"
               >
                 Register as a User
               </Link>
@@ -312,14 +315,14 @@ function ForMerchants() {
 
           {/* Right steps card */}
           <div className="relative">
-            <div className="rounded-2xl bg-red-700/60 backdrop-blur-sm p-8 border border-red-500/30">
+            <div className="rounded-2xl bg-zinc-800/60 backdrop-blur-sm p-8 border border-zinc-700/50">
               <div className="space-y-5">
                 {steps.map((s, i) => (
                   <div key={i} className="flex items-center gap-4">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500 text-sm font-bold text-white">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">
                       {s.step}
                     </div>
-                    <span className="text-white font-medium">{s.text}</span>
+                    <span className="text-zinc-200 font-medium">{s.text}</span>
                   </div>
                 ))}
               </div>
