@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const RED = "#D12D34";
+const SALMON = "#FCA581";
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -52,7 +55,10 @@ function Nav() {
             Dashboard
           </Link>
         </div>
-        <Button className="bg-red-600 hover:bg-red-700 text-sm rounded-full px-5">
+        <Button
+          className="text-sm rounded-full px-5 text-white"
+          style={{ backgroundColor: RED }}
+        >
           Download App
         </Button>
       </div>
@@ -66,13 +72,21 @@ function Hero() {
   return (
     <section className="relative pt-28 pb-0 overflow-hidden">
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-red-700/20 via-red-900/10 to-zinc-950" />
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(to bottom, ${RED}33 0%, ${RED}1a 40%, transparent 100%)`,
+        }}
+      />
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="grid md:grid-cols-2 gap-8 items-center">
           {/* Left copy */}
           <div className="pb-16 md:pb-24">
-            <div className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-1.5 text-sm font-medium text-white mb-8">
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-white mb-8"
+              style={{ backgroundColor: RED }}
+            >
               <Image src="/star.png" alt="" width={16} height={16} />
               Now live in Angeles City, Pampanga
             </div>
@@ -80,7 +94,7 @@ function Hero() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
               Explore the Philippines
               <br />
-              <span style={{ color: "#FCA581" }}>like a game.</span>
+              <span style={{ color: SALMON }}>like a game.</span>
             </h1>
 
             <p className="max-w-lg text-base md:text-lg text-zinc-400 leading-relaxed mb-8">
@@ -90,7 +104,11 @@ function Hero() {
             </p>
 
             <div className="flex items-center gap-4">
-              <Button size="lg" className="bg-red-600 hover:bg-red-700 text-sm font-semibold rounded-full px-6 h-11">
+              <Button
+                size="lg"
+                className="text-sm font-semibold rounded-full px-6 h-11 text-white"
+                style={{ backgroundColor: RED }}
+              >
                 <Smartphone className="h-4 w-4 mr-2" />
                 Download for iOS
               </Button>
@@ -225,7 +243,7 @@ function Features() {
     <section id="features" className="py-24 border-t border-zinc-800/50">
       <div className="mx-auto max-w-6xl px-6">
         <div className="text-center mb-16">
-          <p className="text-red-500 font-medium text-sm mb-3">Features</p>
+          <p className="font-medium text-sm mb-3" style={{ color: RED }}>Features</p>
           <h2 className="text-3xl md:text-4xl font-bold">
             Everything you need to explore
           </h2>
@@ -238,7 +256,10 @@ function Features() {
               className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5 hover:border-zinc-700 transition-colors"
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-600/10 text-red-500">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${RED}1a`, color: RED }}
+                >
                   {f.icon}
                 </div>
                 <h3 className="font-semibold">{f.title}</h3>
@@ -272,14 +293,18 @@ function ForMerchants() {
 
   return (
     <section id="merchants" className="relative py-24 overflow-hidden bg-zinc-900">
-      {/* Subtle red glow in the background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-900/30 via-zinc-900 to-zinc-900 pointer-events-none" />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `linear-gradient(135deg, ${RED}26 0%, transparent 60%)`,
+        }}
+      />
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           {/* Left copy */}
           <div>
-            <p className="text-red-400 font-medium text-sm mb-3">
+            <p className="font-medium text-sm mb-3" style={{ color: RED }}>
               For Businesses
             </p>
             <h2 className="text-3xl md:text-4xl font-bold mb-6 text-white">
@@ -293,14 +318,17 @@ function ForMerchants() {
             <ul className="space-y-3 text-sm text-zinc-300 mb-8">
               {checklist.map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
+                  <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" style={{ color: RED }} />
                   {item}
                 </li>
               ))}
             </ul>
             <div className="flex items-center gap-4">
               <Link href="/admin/register">
-                <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full px-6">
+                <Button
+                  className="text-white font-semibold rounded-full px-6"
+                  style={{ backgroundColor: RED }}
+                >
                   Register as a Merchant
                 </Button>
               </Link>
@@ -319,7 +347,10 @@ function ForMerchants() {
               <div className="space-y-5">
                 {steps.map((s, i) => (
                   <div key={i} className="flex items-center gap-4">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: RED }}
+                    >
                       {s.step}
                     </div>
                     <span className="text-zinc-200 font-medium">{s.text}</span>
@@ -361,7 +392,8 @@ function CTA() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button
             size="lg"
-            className="bg-red-600 hover:bg-red-700 text-sm font-semibold rounded-full px-8 h-12"
+            className="text-sm font-semibold rounded-full px-8 h-12 text-white"
+            style={{ backgroundColor: RED }}
           >
             <Smartphone className="h-4 w-4 mr-2" />
             Download on iOS
@@ -370,7 +402,8 @@ function CTA() {
             <Button
               size="lg"
               variant="outline"
-              className="border-red-600 text-red-400 hover:bg-red-600/10 text-sm rounded-full px-8 h-12"
+              className="text-sm rounded-full px-8 h-12 bg-transparent hover:bg-white/5"
+              style={{ borderColor: SALMON, color: SALMON }}
             >
               Become a Merchant Partner
             </Button>
