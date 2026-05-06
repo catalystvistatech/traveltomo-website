@@ -76,7 +76,7 @@ export async function getTravelChallenge(id: string) {
   const { data } = await supabase
     .from("travel_challenges")
     .select(
-      "*, challenges(id, title, description, status, establishment_type, latitude, longitude, time_of_day_start, time_of_day_end, days_of_week, max_completions, current_completions, xp_reward, rewards(title, discount_type, discount_value))"
+      "*, challenges(id, title, description, status, establishment_type, latitude, longitude, time_of_day_start, time_of_day_end, days_of_week, max_completions, current_completions, xp_reward, duration_minutes, verification_type, rewards(title, description, discount_type, discount_value))"
     )
     .eq("id", id)
     .single();
@@ -282,6 +282,7 @@ export async function addChildChallenge(
       radius_meters: parsed.data.radius_meters,
       latitude: parsed.data.latitude,
       longitude: parsed.data.longitude,
+      duration_minutes: parsed.data.duration_minutes ?? null,
       time_of_day_start: parsed.data.time_of_day_start || null,
       time_of_day_end: parsed.data.time_of_day_end || null,
       days_of_week: parsed.data.days_of_week,

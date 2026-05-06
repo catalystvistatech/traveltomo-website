@@ -36,7 +36,6 @@ import { toast } from "sonner";
 import {
   ESTABLISHMENT_LABELS,
   ESTABLISHMENT_TYPES,
-  WEEK_DAYS,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X } from "lucide-react";
@@ -64,6 +63,7 @@ const emptyChild = {
   establishment_type: undefined as EstablishmentType | undefined,
   xp_reward: 50,
   radius_meters: 50,
+  duration_minutes: "30",
   latitude: "",
   longitude: "",
   time_of_day_start: "",
@@ -72,7 +72,7 @@ const emptyChild = {
   max_completions: "",
   reward_title: "",
   reward_description: "",
-  reward_discount_type: "percentage" as "percentage" | "fixed" | "freebie",
+  reward_discount_type: "freebie" as "percentage" | "fixed" | "freebie",
   reward_discount_value: "",
 };
 
@@ -208,18 +208,6 @@ export default function TravelChallengeDetailPage({
     }
   }
 
-  function toggleDay(day: number) {
-    setChild((c) => {
-      const exists = c.days_of_week.includes(day);
-      return {
-        ...c,
-        days_of_week: exists
-          ? c.days_of_week.filter((d) => d !== day)
-          : [...c.days_of_week, day].sort(),
-      };
-    });
-  }
-
   const hasPin =
     child.latitude !== "" &&
     child.longitude !== "" &&
@@ -234,10 +222,14 @@ export default function TravelChallengeDetailPage({
 
   async function handleAddChild() {
     setSaving(true);
+    const isGps = child.verification_type === "gps";
     const payload = {
       ...child,
       latitude: parseFloat(child.latitude),
       longitude: parseFloat(child.longitude),
+      duration_minutes: isGps && child.duration_minutes
+        ? parseInt(child.duration_minutes)
+        : undefined,
       max_completions: child.max_completions
         ? parseInt(child.max_completions)
         : undefined,
@@ -642,117 +634,80 @@ export default function TravelChallengeDetailPage({
             </div>
             <p className="text-xs text-zinc-500">Click anywhere on the map to place a pin, or drag the marker to adjust.</p>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Title *</Label>
-                <Input
-                  value={child.title}
-                  onChange={(e) =>
-                    setChild({ ...child, title: e.target.value })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Type</Label>
-                <Select
-                  value={child.type}
-                  onValueChange={(v: string | null) =>
-                    v &&
-                    setChild({
-                      ...child,
-                      type: v as typeof child.type,
-                    })
-                  }
-                >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="checkin">Check-in</SelectItem>
-                    <SelectItem value="photo">Photo</SelectItem>
-                    <SelectItem value="qr">QR</SelectItem>
-                    <SelectItem value="quiz">Quiz</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Title *</Label>
+              <Input
+                value={child.title}
+                onChange={(e) =>
+                  setChild({ ...child, title: e.target.value })
+                }
+                placeholder="e.g. Visit Jollibee Clark"
+                className="bg-zinc-800 border-zinc-700 text-white"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-300">Description *</Label>
+              <Label className="text-zinc-300">Challenge Description *</Label>
               <Textarea
                 rows={2}
                 value={child.description}
                 onChange={(e) =>
                   setChild({ ...child, description: e.target.value })
                 }
+                placeholder="Describe what the traveler needs to do at this location"
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-zinc-300">Opens at</Label>
-                <Input
-                  type="time"
-                  value={child.time_of_day_start}
-                  onChange={(e) =>
+                <Label className="text-zinc-300">Verification *</Label>
+                <Select
+                  value={child.verification_type}
+                  onValueChange={(v: string | null) => {
+                    if (!v) return;
                     setChild({
                       ...child,
-                      time_of_day_start: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
+                      verification_type: v as typeof child.verification_type,
+                      type: v === "gps" ? "checkin" : "photo",
+                      radius_meters: v === "gps" ? 50 : 100,
+                    });
+                  }}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gps">GPS — Stay at location for a duration</SelectItem>
+                    <SelectItem value="photo_upload">Photo — Take a photo as proof</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-zinc-500">
+                  {child.verification_type === "gps"
+                    ? "User must stay within 50m of the pin for the specified duration."
+                    : "User takes a photo at the location as proof of visit."}
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Closes at</Label>
-                <Input
-                  type="time"
-                  value={child.time_of_day_end}
-                  onChange={(e) =>
-                    setChild({
-                      ...child,
-                      time_of_day_end: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Max completions</Label>
-                <Input
-                  type="number"
-                  placeholder="unlimited"
-                  value={child.max_completions}
-                  onChange={(e) =>
-                    setChild({
-                      ...child,
-                      max_completions: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
+              {child.verification_type === "gps" && (
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Duration (minutes) *</Label>
+                  <Input
+                    type="number"
+                    value={child.duration_minutes}
+                    onChange={(e) =>
+                      setChild({ ...child, duration_minutes: e.target.value })
+                    }
+                    placeholder="30"
+                    min={1}
+                    className="bg-zinc-800 border-zinc-700 text-white"
+                  />
+                  <p className="text-xs text-zinc-500">
+                    How long the traveler must stay at this spot.
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label className="text-zinc-300">Active days</Label>
-              <div className="flex gap-2 flex-wrap">
-                {WEEK_DAYS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    onClick={() => toggleDay(d.value)}
-                    className={`px-3 py-1 text-xs rounded-full border ${
-                      child.days_of_week.includes(d.value)
-                        ? "bg-red-600 border-red-600 text-white"
-                        : "border-zinc-700 text-zinc-400"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Establishment</Label>
                 <Select
@@ -778,101 +733,35 @@ export default function TravelChallengeDetailPage({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">XP</Label>
-                <Input
-                  type="number"
-                  value={child.xp_reward}
-                  onChange={(e) =>
-                    setChild({
-                      ...child,
-                      xp_reward: parseInt(e.target.value || "0"),
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Verification</Label>
-                <Select
-                  value={child.verification_type}
-                  onValueChange={(v: string | null) => {
-                    if (!v) return;
-                    const radiusByType: Record<string, number> = {
-                      gps: 50,
-                      qr_scan: 50,
-                      photo_upload: 100,
-                      quiz_answer: 500,
-                    };
-                    setChild({
-                      ...child,
-                      verification_type: v as typeof child.verification_type,
-                      radius_meters: radiusByType[v] ?? 50,
-                    });
-                  }}
-                >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gps">GPS</SelectItem>
-                    <SelectItem value="qr_scan">QR</SelectItem>
-                    <SelectItem value="photo_upload">Photo</SelectItem>
-                    <SelectItem value="quiz_answer">Quiz</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="pt-3 border-t border-zinc-800 space-y-3">
               <h4 className="text-sm font-semibold text-white">
-                Reward for this challenge
+                Reward
               </h4>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <p className="text-xs text-zinc-500">
+                After completing the challenge, the traveler gets a QR code to claim this reward at your business.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-zinc-300">Title *</Label>
+                  <Label className="text-zinc-300">Reward Title *</Label>
                   <Input
                     value={child.reward_title}
                     onChange={(e) =>
                       setChild({ ...child, reward_title: e.target.value })
                     }
+                    placeholder="e.g. Free Iced Coffee, 20% Off Meal"
                     className="bg-zinc-800 border-zinc-700 text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-zinc-300">Type *</Label>
-                  <Select
-                    value={child.reward_discount_type}
-                    onValueChange={(v: string | null) =>
-                      v &&
-                      setChild({
-                        ...child,
-                        reward_discount_type:
-                          v as typeof child.reward_discount_type,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">% discount</SelectItem>
-                      <SelectItem value="fixed">Fixed amount</SelectItem>
-                      <SelectItem value="freebie">Freebie</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Value</Label>
+                  <Label className="text-zinc-300">Reward Description</Label>
                   <Input
-                    type="number"
-                    value={child.reward_discount_value}
+                    value={child.reward_description}
                     onChange={(e) =>
-                      setChild({
-                        ...child,
-                        reward_discount_value: e.target.value,
-                      })
+                      setChild({ ...child, reward_description: e.target.value })
                     }
+                    placeholder="e.g. Show QR code to the cashier"
                     className="bg-zinc-800 border-zinc-700 text-white"
                   />
                 </div>
@@ -912,6 +801,10 @@ export default function TravelChallengeDetailPage({
             )}
             {children.map((c) => {
               const cr = c as Record<string, unknown>;
+              const vType = cr.verification_type as string | null;
+              const dur = cr.duration_minutes as number | null;
+              const rewards = (cr.rewards as Record<string, unknown>[] | null) ?? [];
+              const rewardTitle = rewards[0]?.title as string | null;
               return (
                 <div
                   key={cr.id as string}
@@ -926,17 +819,11 @@ export default function TravelChallengeDetailPage({
                         variant="outline"
                         className="border-zinc-700 text-zinc-400 text-[10px] uppercase"
                       >
-                        {cr.status as string}
+                        {vType === "gps" ? `GPS · ${dur ?? "?"}min` : vType === "photo_upload" ? "Photo" : (vType ?? "—")}
                       </Badge>
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
-                      {cr.time_of_day_start
-                        ? `${cr.time_of_day_start} ? ${cr.time_of_day_end as string}`
-                        : "All day"}{" "}
-                      ?{" "}
-                      {cr.max_completions
-                        ? `${cr.current_completions as number}/${cr.max_completions as number} used`
-                        : "no cap"}
+                      {rewardTitle ? `Reward: ${rewardTitle}` : "No reward"}
                     </p>
                   </div>
                   <Button
