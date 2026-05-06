@@ -26,9 +26,10 @@ export async function GET(request: Request, { params }: Params) {
        ),
        children:challenges!travel_challenge_id (
          id, title, description, instructions, type, verification_type,
-         establishment_type, xp_reward, radius_meters,
+         establishment_type, xp_reward, radius_meters, duration_minutes,
          latitude, longitude, status,
-         place:places (id, name, latitude, longitude, category, image_url, city)
+         place:places (id, name, latitude, longitude, category, image_url, city),
+         rewards (title, description, discount_type, discount_value, qr_code_value)
        )`
     )
     .eq("id", id)
@@ -55,6 +56,7 @@ export async function GET(request: Request, { params }: Params) {
     establishment_type: string | null;
     xp_reward: number | null;
     radius_meters: number | null;
+    duration_minutes: number | null;
     latitude: number | null;
     longitude: number | null;
     status: string;
@@ -67,6 +69,13 @@ export async function GET(request: Request, { params }: Params) {
       image_url: string | null;
       city: string | null;
     } | null;
+    rewards: {
+      title: string;
+      description: string | null;
+      discount_type: string;
+      discount_value: number | null;
+      qr_code_value: string | null;
+    }[] | null;
   };
 
   type TravelRow = {
@@ -100,6 +109,7 @@ export async function GET(request: Request, { params }: Params) {
     .map((c) => {
       const lat = c.latitude ?? c.place?.latitude ?? businessLat;
       const lng = c.longitude ?? c.place?.longitude ?? businessLng;
+      const reward = c.rewards?.[0] ?? null;
       return {
         id: c.id,
         title: c.title,
@@ -110,10 +120,14 @@ export async function GET(request: Request, { params }: Params) {
         establishment_type: c.establishment_type ?? row.business?.establishment_type ?? null,
         xp_reward: c.xp_reward,
         radius_meters: c.radius_meters,
+        duration_minutes: c.duration_minutes,
         latitude: lat,
         longitude: lng,
         place_name: c.place?.name ?? row.business?.name ?? c.title,
         place_image_url: c.place?.image_url ?? null,
+        reward_title: reward?.title ?? null,
+        reward_description: reward?.description ?? null,
+        reward_qr_code: reward?.qr_code_value ?? null,
       };
     })
     .filter((c) => c.latitude != null && c.longitude != null);
