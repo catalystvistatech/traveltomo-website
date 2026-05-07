@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Trophy, Gift, BarChart3,
-  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack,
+  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack, Inbox,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
@@ -23,6 +23,7 @@ const merchantNav = [
   { title: "Promote", href: "/admin/promote", icon: Megaphone },
   { title: "Rewards", href: "/admin/rewards", icon: Gift },
   { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { title: "Inbox", href: "/admin/inbox", icon: Inbox },
 ];
 
 const adminNav = [
