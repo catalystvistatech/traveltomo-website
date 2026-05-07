@@ -11,7 +11,8 @@ import {
   updateUserRole,
   type UserRole,
 } from "@/lib/actions/auth";
-import { Users } from "lucide-react";
+import { Users, Building2 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
@@ -222,19 +223,30 @@ export default function ManageMerchantsPage() {
                     </div>
                   )}
                   {viewerRole === "superadmin" && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {roleOptions.map((role) => (
-                        <Button
-                          key={role}
-                          size="sm"
-                          variant="outline"
-                          disabled={loadingUserId === profile.id || profile.role === role}
-                          onClick={() => handleRoleChange(profile.id, role)}
-                          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                        >
-                          Set {role}
-                        </Button>
-                      ))}
+                    <div className="mt-3 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {roleOptions.map((role) => (
+                          <Button
+                            key={role}
+                            size="sm"
+                            variant="outline"
+                            disabled={loadingUserId === profile.id || profile.role === role}
+                            onClick={() => handleRoleChange(profile.id, role)}
+                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                          >
+                            Set {role}
+                          </Button>
+                        ))}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        render={<Link href={`/admin/manage/merchants/${profile.id}`} />}
+                        className="border-zinc-600 text-zinc-200 hover:bg-zinc-800 w-full justify-start"
+                      >
+                        <Building2 className="h-3.5 w-3.5 mr-1.5" />
+                        Manage Business
+                      </Button>
                     </div>
                   )}
                 </CardContent>

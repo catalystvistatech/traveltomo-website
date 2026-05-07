@@ -89,6 +89,7 @@ export async function getRoleManagementData() {
     .select(
       "id, role, merchant_request_status, display_name, avatar_url, created_at, businesses!businesses_merchant_id_fkey(id,name,city,category,verification_status)"
     )
+    .in("role", ["merchant", "admin", "superadmin"])
     .order("created_at", { ascending: false });
 
   if (error) return { error: error.message, data: [] as Record<string, unknown>[] };
