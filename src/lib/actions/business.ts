@@ -140,6 +140,12 @@ export async function deleteBusiness(businessId: string) {
   return { success: true };
 }
 
+/** Convenience wrapper — returns the first business for the current merchant. */
+export async function getBusiness() {
+  const all = await getBusinesses();
+  return all[0] ?? null;
+}
+
 // ─── Admin: business verification queue ───────────────────────────────────
 
 export async function listBusinessVerificationQueue() {
