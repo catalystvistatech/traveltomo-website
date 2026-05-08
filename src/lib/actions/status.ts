@@ -41,17 +41,20 @@ export async function getRecommendationStatus(): Promise<RecommendationStatus> {
   }
 
   const supabase = await createClient();
-  const { data: biz } = await supabase
+
+  // With multi-business support, prefer the approved business; fall back
+  // to the first one so the status card still shows useful info.
+  const { data: bizRows } = await supabase
     .from("businesses")
-    .select(
-      "id, verification_status, latitude, longitude, hours, service_radius_meters, timezone"
-    )
+    .select("id, verification_status, latitude, longitude, hours, service_radius_meters, timezone")
     .eq("merchant_id", user.id)
-    .maybeSingle();
+    .order("created_at", { ascending: true });
+
+  const allBiz = bizRows ?? [];
+  const biz = allBiz.find((b) => b.verification_status === "approved") ?? allBiz[0] ?? null;
 
   const businessVerified = biz?.verification_status === "approved";
-  const businessVerificationStatus =
-    (biz?.verification_status as string | null) ?? null;
+  const businessVerificationStatus = (biz?.verification_status as string | null) ?? null;
   const hasLocation = !!biz?.latitude && !!biz?.longitude;
   const hasHours =
     !!biz?.hours && typeof biz.hours === "object" && Object.keys(biz.hours as Record<string, unknown>).length > 0;
