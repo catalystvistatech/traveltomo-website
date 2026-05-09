@@ -209,7 +209,7 @@ function BusinessEditor({
         </div>
         <div className="space-y-2">
           <Label className="text-zinc-300">Verification Status (on save)</Label>
-          <Select value={verificationStatus} onValueChange={setVerificationStatus}>
+          <Select value={verificationStatus} onValueChange={(v) => { if (v) setVerificationStatus(v); }}>
             <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
             <SelectContent>
               {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -255,7 +255,7 @@ function BusinessEditor({
                 <Input type="time" value={h.open ?? ""} disabled={h.closed}
                   onChange={(e) => updateHours(d, { open: e.target.value })}
                   className="w-28 bg-zinc-800 border-zinc-700 text-white" />
-                <span className="text-zinc-500">–</span>
+                <span className="text-zinc-500">-</span>
                 <Input type="time" value={h.close ?? ""} disabled={h.closed}
                   onChange={(e) => updateHours(d, { close: e.target.value })}
                   className="w-28 bg-zinc-800 border-zinc-700 text-white" />
@@ -318,7 +318,7 @@ export default function MerchantBusinessManagePage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Merchant Businesses</h1>
           <p className="text-zinc-400 mt-1 text-sm">
-            Superadmin view — {businesses.length} business{businesses.length !== 1 ? "es" : ""} registered.
+            Superadmin view - {businesses.length} business{businesses.length !== 1 ? "es" : ""} registered.
           </p>
         </div>
         <Button
@@ -377,7 +377,7 @@ export default function MerchantBusinessManagePage() {
                 <div className="min-w-0 flex-1">
                   <CardTitle className="text-white truncate">{rec.name as string}</CardTitle>
                   <CardDescription className="text-zinc-500 text-xs mt-0.5">
-                    {rec.city as string} · {rec.establishment_type as string}
+                    {rec.city as string} - {rec.establishment_type as string}
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className={STATUS_COLORS[status] ?? STATUS_COLORS.unsubmitted}>
