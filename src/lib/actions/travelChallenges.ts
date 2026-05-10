@@ -31,8 +31,11 @@ async function getApprovedBusiness(userId: string) {
     .from("businesses")
     .select("id, verification_status, latitude, longitude, service_radius_meters")
     .eq("merchant_id", userId)
-    .single();
-  return data;
+    .order("created_at", { ascending: true });
+  const rows = data ?? [];
+  // Prefer an approved business; fall back to the first one so the error
+  // message accurately reflects the actual verification state.
+  return rows.find((b) => b.verification_status === "approved") ?? rows[0] ?? null;
 }
 
 // Haversine distance in meters
