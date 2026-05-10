@@ -102,6 +102,7 @@ export type ExtendedBusinessInput = z.infer<typeof extendedBusinessSchema>;
 
 export const travelChallengeSchema = z.object({
   title: z.string().min(3, "Title needs at least 3 characters").max(120, "Title is too long"),
+  business_id: z.string().uuid("Please select a business").optional().or(z.literal("")),
   description: z.string().max(500).optional().or(z.literal("")),
   cover_url: z.string().url().optional().or(z.literal("")),
   completion_mode: z.enum(["any", "all"]).default("any"),

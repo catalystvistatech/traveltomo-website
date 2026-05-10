@@ -7,6 +7,7 @@ import {
   createTravelChallenge,
   deleteTravelChallenge,
   uploadTravelChallengeCover,
+  listMerchantBusinesses,
 } from "@/lib/actions/travelChallenges";
 import {
   Card,
@@ -44,6 +45,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 export default function TravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [businesses, setBusinesses] = useState<{ id: string; name: string; verification_status: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export default function TravelChallengesPage() {
     title: "",
     description: "",
     cover_url: "",
+    business_id: "",
     completion_mode: "any" as "any" | "all",
     date_range_start: "",
     date_range_end: "",
@@ -65,7 +68,14 @@ export default function TravelChallengesPage() {
 
   async function reload() {
     setIsLoading(true);
-    setRows(await listTravelChallenges());
+    const [tcRows, bizList] = await Promise.all([listTravelChallenges(), listMerchantBusinesses()]);
+    setRows(tcRows);
+    setBusinesses(bizList);
+    // Pre-select the first approved business
+    if (!form.business_id) {
+      const approved = bizList.find((b) => b.verification_status === "approved");
+      if (approved) setForm((f) => ({ ...f, business_id: approved.id }));
+    }
     setIsLoading(false);
   }
 
@@ -217,6 +227,26 @@ export default function TravelChallengesPage() {
                 </label>
               )}
             </div>
+
+            {businesses.length > 1 && (
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Business *</Label>
+                <Select
+                  value={form.business_id}
+                  onValueChange={(v) => { if (v) setForm({ ...form, business_id: v }); }}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue placeholder="Select a business" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businesses.filter((b) => b.verification_status === "approved").map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-zinc-500">Challenge stops must fall within this business's service radius.</p>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
