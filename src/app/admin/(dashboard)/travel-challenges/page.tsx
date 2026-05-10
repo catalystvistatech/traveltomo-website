@@ -236,10 +236,8 @@ export default function TravelChallengesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">
-                      Any (1 done ? rewarded)
-                    </SelectItem>
-                    <SelectItem value="all">All (full set only)</SelectItem>
+                    <SelectItem value="any">Any — complete 1</SelectItem>
+                    <SelectItem value="all">All — complete every stop</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
