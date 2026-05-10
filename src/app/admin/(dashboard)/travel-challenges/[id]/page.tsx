@@ -184,9 +184,8 @@ export default function TravelChallengeDetailPage({
 
   function formatActionError(err: Record<string, unknown>): string {
     if ("_form" in err) return (err._form as string[])[0];
-    return Object.entries(err)
-      .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
-      .join(" · ") || "Validation failed";
+    const messages = Object.values(err).flatMap((v) => v as string[]);
+    return messages[0] ?? "Please check your inputs and try again.";
   }
 
   if (!tc) return <PageSkeleton variant="list" />;

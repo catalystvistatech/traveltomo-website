@@ -126,7 +126,9 @@ function BusinessEditor({
       );
       if ("error" in result) {
         const err = result.error as Record<string, unknown>;
-        toast.error("_form" in err ? (err._form as string[])[0] : "Check form fields");
+        toast.error("_form" in err
+          ? (err._form as string[])[0]
+          : (Object.values(err).flatMap((v) => v as string[])[0] ?? "Please check your inputs and try again."));
       } else {
         toast.success(isNew ? "Business created." : "Business saved.");
         onSaved();
