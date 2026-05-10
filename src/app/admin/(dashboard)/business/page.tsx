@@ -123,7 +123,9 @@ function BusinessForm({
       const result = await upsertBusiness(form, businessId);
       if ("error" in result) {
         const err = result.error as Record<string, unknown>;
-        const msg = "_form" in err ? (err._form as string[])[0] : "Check form fields";
+        const msg = "_form" in err
+          ? (err._form as string[])[0]
+          : (Object.values(err).flatMap((v) => v as string[])[0] ?? "Please check your inputs and try again.");
         toast.error(msg);
       } else {
         toast.success(isNew ? "Business created." : "Business saved.");
