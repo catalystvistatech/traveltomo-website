@@ -33,9 +33,16 @@ async function getApprovedBusiness(userId: string) {
     .eq("merchant_id", userId)
     .order("created_at", { ascending: true });
   const rows = data ?? [];
-  // Prefer an approved business; fall back to the first one so the error
-  // message accurately reflects the actual verification state.
   return rows.find((b) => b.verification_status === "approved") ?? rows[0] ?? null;
+}
+
+async function getAllBusinesses(userId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("businesses")
+    .select("id, verification_status, latitude, longitude, service_radius_meters")
+    .eq("merchant_id", userId);
+  return data ?? [];
 }
 
 // Haversine distance in meters
@@ -249,18 +256,32 @@ export async function addChildChallenge(
 
   const biz = await getApprovedBusiness(parent.merchant_id);
   if (!biz) return { error: { _form: ["Business profile missing"] } };
-  if (biz.latitude != null && biz.longitude != null) {
-    const dist = distanceMeters(
-      biz.latitude,
-      biz.longitude,
-      parsed.data.latitude,
-      parsed.data.longitude
+
+  // Check radius against ALL of the merchant's businesses — the pin just
+  // needs to fall within at least one of them.
+  const allBiz = await getAllBusinesses(parent.merchant_id);
+  const bizWithLocation = allBiz.filter(
+    (b) => b.latitude != null && b.longitude != null
+  );
+  if (bizWithLocation.length > 0) {
+    const withinAny = bizWithLocation.some(
+      (b) =>
+        distanceMeters(b.latitude!, b.longitude!, parsed.data.latitude, parsed.data.longitude) <=
+        (b.service_radius_meters ?? 2000)
     );
-    if (dist > biz.service_radius_meters) {
+    if (!withinAny) {
+      const closest = bizWithLocation.reduce((best, b) => {
+        const d = distanceMeters(b.latitude!, b.longitude!, parsed.data.latitude, parsed.data.longitude);
+        const bd = distanceMeters(best.latitude!, best.longitude!, parsed.data.latitude, parsed.data.longitude);
+        return d < bd ? b : best;
+      });
+      const closestDist = Math.round(
+        distanceMeters(closest.latitude!, closest.longitude!, parsed.data.latitude, parsed.data.longitude)
+      );
       return {
         error: {
           _form: [
-            `Challenge location is ${Math.round(dist)}m from your business ? outside your ${biz.service_radius_meters}m service radius.`,
+            `Challenge location is ${closestDist}m from your nearest business — outside its ${closest.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
           ],
         },
       };
