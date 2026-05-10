@@ -420,8 +420,8 @@ export default function TravelChallengeDetailPage({
                 <Select value={editForm.completion_mode} onValueChange={(v: string | null) => v && setEditForm({ ...editForm, completion_mode: v as "any" | "all" })}>
                   <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Any (1 done = rewarded)</SelectItem>
-                    <SelectItem value="all">All (full set only)</SelectItem>
+                    <SelectItem value="any">Any — complete 1</SelectItem>
+                    <SelectItem value="all">All — complete every stop</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
