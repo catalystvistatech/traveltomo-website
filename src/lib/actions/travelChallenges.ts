@@ -64,6 +64,18 @@ function distanceMeters(
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+export async function listMerchantBusinesses() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("businesses")
+    .select("id, name, verification_status")
+    .eq("merchant_id", user.id)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as { id: string; name: string; verification_status: string }[];
+}
+
 export async function listTravelChallenges() {
   const user = await getCurrentUser();
   if (!user) return [];
@@ -100,15 +112,26 @@ export async function createTravelChallenge(input: unknown) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: { _form: [gate.error] } };
 
-  const biz = await getApprovedBusiness(gate.user.id);
-  if (!biz || biz.verification_status !== "approved") {
-    return {
-      error: {
-        _form: [
-          "Your business must be verified by an admin before creating travel challenges.",
-        ],
-      },
-    };
+  // If the merchant specified a business_id, verify it belongs to them and is approved.
+  // Otherwise fall back to any approved business.
+  let selectedBizId: string | null = parsed.data.business_id || null;
+  if (selectedBizId) {
+    const supabaseCheck = await createClient();
+    const { data: pickedBiz } = await supabaseCheck
+      .from("businesses")
+      .select("id, verification_status")
+      .eq("id", selectedBizId)
+      .eq("merchant_id", gate.user.id)
+      .maybeSingle();
+    if (!pickedBiz || pickedBiz.verification_status !== "approved") {
+      return { error: { _form: ["The selected business is not verified yet."] } };
+    }
+  } else {
+    const fallback = await getApprovedBusiness(gate.user.id);
+    if (!fallback || fallback.verification_status !== "approved") {
+      return { error: { _form: ["Your business must be verified by an admin before creating travel challenges."] } };
+    }
+    selectedBizId = fallback.id;
   }
 
   const supabase = await createClient();
@@ -116,7 +139,7 @@ export async function createTravelChallenge(input: unknown) {
     .from("travel_challenges")
     .insert({
       merchant_id: gate.user.id,
-      business_id: biz.id,
+      business_id: selectedBizId,
       title: parsed.data.title,
       description: parsed.data.description || null,
       cover_url: parsed.data.cover_url || null,
@@ -146,21 +169,25 @@ export async function updateTravelChallenge(id: string, input: unknown) {
   if ("error" in gate) return { error: { _form: [gate.error] } };
 
   const supabase = await createClient();
+  const updatePayload: Record<string, unknown> = {
+    title: parsed.data.title,
+    description: parsed.data.description || null,
+    cover_url: parsed.data.cover_url || null,
+    completion_mode: parsed.data.completion_mode,
+    date_range_start: parsed.data.date_range_start || null,
+    date_range_end: parsed.data.date_range_end || null,
+    max_total_completions: parsed.data.max_total_completions ?? null,
+    big_reward_title: parsed.data.big_reward_title || null,
+    big_reward_description: parsed.data.big_reward_description || null,
+    big_reward_discount_type: parsed.data.big_reward_discount_type ?? null,
+    big_reward_discount_value: parsed.data.big_reward_discount_value ?? null,
+  };
+  if (parsed.data.business_id) {
+    updatePayload.business_id = parsed.data.business_id;
+  }
   const { error } = await supabase
     .from("travel_challenges")
-    .update({
-      title: parsed.data.title,
-      description: parsed.data.description || null,
-      cover_url: parsed.data.cover_url || null,
-      completion_mode: parsed.data.completion_mode,
-      date_range_start: parsed.data.date_range_start || null,
-      date_range_end: parsed.data.date_range_end || null,
-      max_total_completions: parsed.data.max_total_completions ?? null,
-      big_reward_title: parsed.data.big_reward_title || null,
-      big_reward_description: parsed.data.big_reward_description || null,
-      big_reward_discount_type: parsed.data.big_reward_discount_type ?? null,
-      big_reward_discount_value: parsed.data.big_reward_discount_value ?? null,
-    })
+    .update(updatePayload)
     .eq("id", id);
 
   if (error) return { error: { _form: [error.message] } };
@@ -238,7 +265,7 @@ export async function addChildChallenge(
   const supabase = await createClient();
   const { data: parent } = await supabase
     .from("travel_challenges")
-    .select("id, merchant_id")
+    .select("id, merchant_id, business_id")
     .eq("id", travelChallengeId)
     .single();
   if (!parent) return { error: { _form: ["Travel challenge not found"] } };
@@ -257,9 +284,12 @@ export async function addChildChallenge(
   const biz = await getApprovedBusiness(parent.merchant_id);
   if (!biz) return { error: { _form: ["Business profile missing"] } };
 
-  // Check radius against ALL of the merchant's businesses — the pin just
-  // needs to fall within at least one of them.
-  const allBiz = await getAllBusinesses(parent.merchant_id);
+  // Radius check: if the travel challenge is tied to a specific business,
+  // check only that one. Otherwise check all of the merchant's businesses.
+  const tcBusinessId = (parent as Record<string, unknown>).business_id as string | null;
+  const allBiz = tcBusinessId
+    ? (await getAllBusinesses(parent.merchant_id)).filter((b) => b.id === tcBusinessId)
+    : await getAllBusinesses(parent.merchant_id);
   const bizWithLocation = allBiz.filter(
     (b) => b.latitude != null && b.longitude != null
   );

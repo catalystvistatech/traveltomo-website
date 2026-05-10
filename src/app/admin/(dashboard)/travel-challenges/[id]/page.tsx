@@ -11,9 +11,11 @@ import {
   deleteTravelChallenge,
   submitTravelChallengeForReview,
   cloneTemplateIntoTravelChallenge,
+  listMerchantBusinesses,
 } from "@/lib/actions/travelChallenges";
 import { listPublishedTemplates } from "@/lib/actions/templates";
 import { getBusiness } from "@/lib/actions/business";
+type BusinessOption = { id: string; name: string; verification_status: string };
 import {
   Card,
   CardContent,
@@ -92,10 +94,12 @@ export default function TravelChallengeDetailPage({
   const [saving, setSaving] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
     cover_url: "",
+    business_id: "",
     completion_mode: "any" as "any" | "all",
     date_range_start: "",
     date_range_end: "",
@@ -122,6 +126,7 @@ export default function TravelChallengeDetailPage({
     reload();
     listPublishedTemplates().then(setTemplates);
     getBusiness().then((b) => setBiz(b as Record<string, unknown> | null));
+    listMerchantBusinesses().then(setBusinesses);
   }, [id]);
 
   useEffect(() => {
@@ -273,6 +278,7 @@ export default function TravelChallengeDetailPage({
       title: (r.title as string) ?? "",
       description: (r.description as string) ?? "",
       cover_url: (r.cover_url as string) ?? "",
+      business_id: (r.business_id as string) ?? "",
       completion_mode: ((r.completion_mode as string) ?? "any") as "any" | "all",
       date_range_start: (r.date_range_start as string) ?? "",
       date_range_end: (r.date_range_end as string) ?? "",
@@ -409,6 +415,24 @@ export default function TravelChallengeDetailPage({
             </button>
           </CardHeader>
           <CardContent className="space-y-4">
+            {businesses.length > 1 && (
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Business</Label>
+                <Select
+                  value={editForm.business_id}
+                  onValueChange={(v) => { if (v) setEditForm({ ...editForm, business_id: v }); }}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue placeholder="Select a business" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businesses.filter((b) => b.verification_status === "approved").map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Title *</Label>
