@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       `id, title, description, cover_url, completion_mode,
        big_reward_title, big_reward_description, big_reward_discount_type,
        big_reward_discount_value, status, created_at,
-       business:businesses (
+       business:businesses!travel_challenges_business_id_fkey (
          id, name, city, latitude, longitude, establishment_type
        ),
        children:challenges!travel_challenge_id ( id )`
