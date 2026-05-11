@@ -236,7 +236,9 @@ export default function TravelChallengesPage() {
                   onValueChange={(v) => { if (v) setForm({ ...form, business_id: v }); }}
                 >
                   <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                    <SelectValue placeholder="Select a business" />
+                    <span className="truncate">
+                      {businesses.find((b) => b.id === form.business_id)?.name ?? "Select a business"}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {businesses.filter((b) => b.verification_status === "approved").map((b) => (
