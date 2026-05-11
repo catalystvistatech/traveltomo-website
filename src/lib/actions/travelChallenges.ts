@@ -284,37 +284,28 @@ export async function addChildChallenge(
   const biz = await getApprovedBusiness(parent.merchant_id);
   if (!biz) return { error: { _form: ["Business profile missing"] } };
 
-  // Radius check: if the travel challenge is tied to a specific business,
-  // check only that one. Otherwise check all of the merchant's businesses.
+  // Radius check only applies when the travel challenge is explicitly linked
+  // to a specific business. Unlinked TCs are city-tours — stops can be anywhere.
   const tcBusinessId = (parent as Record<string, unknown>).business_id as string | null;
-  const allBiz = tcBusinessId
-    ? (await getAllBusinesses(parent.merchant_id)).filter((b) => b.id === tcBusinessId)
-    : await getAllBusinesses(parent.merchant_id);
-  const bizWithLocation = allBiz.filter(
-    (b) => b.latitude != null && b.longitude != null
-  );
-  if (bizWithLocation.length > 0) {
-    const withinAny = bizWithLocation.some(
-      (b) =>
-        distanceMeters(b.latitude!, b.longitude!, parsed.data.latitude, parsed.data.longitude) <=
-        (b.service_radius_meters ?? 2000)
-    );
-    if (!withinAny) {
-      const closest = bizWithLocation.reduce((best, b) => {
-        const d = distanceMeters(b.latitude!, b.longitude!, parsed.data.latitude, parsed.data.longitude);
-        const bd = distanceMeters(best.latitude!, best.longitude!, parsed.data.latitude, parsed.data.longitude);
-        return d < bd ? b : best;
-      });
-      const closestDist = Math.round(
-        distanceMeters(closest.latitude!, closest.longitude!, parsed.data.latitude, parsed.data.longitude)
+  if (tcBusinessId) {
+    const allBiz = await getAllBusinesses(parent.merchant_id);
+    const linkedBiz = allBiz.find((b) => b.id === tcBusinessId);
+    if (linkedBiz?.latitude != null && linkedBiz?.longitude != null) {
+      const dist = distanceMeters(
+        linkedBiz.latitude!,
+        linkedBiz.longitude!,
+        parsed.data.latitude,
+        parsed.data.longitude
       );
-      return {
-        error: {
-          _form: [
-            `Challenge location is ${closestDist}m from your nearest business — outside its ${closest.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
-          ],
-        },
-      };
+      if (dist > (linkedBiz.service_radius_meters ?? 2000)) {
+        return {
+          error: {
+            _form: [
+              `Challenge location is ${Math.round(dist)}m from your business — outside its ${linkedBiz.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
+            ],
+          },
+        };
+      }
     }
   }
 
