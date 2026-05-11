@@ -157,7 +157,7 @@ export async function createTravelChallenge(input: unknown) {
     .single();
 
   if (error) return { error: { _form: [error.message] } };
-  revalidatePath("/admin/travel-challenges");
+  revalidatePath("/admin", "layout");
   return { success: true, id: data.id };
 }
 
@@ -191,7 +191,7 @@ export async function updateTravelChallenge(id: string, input: unknown) {
     .eq("id", id);
 
   if (error) return { error: { _form: [error.message] } };
-  revalidatePath(`/admin/travel-challenges/${id}`);
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -217,7 +217,7 @@ export async function submitTravelChallengeForReview(id: string) {
     .update({ status: "live", approved_at: now })
     .eq("travel_challenge_id", id);
 
-  revalidatePath(`/admin/travel-challenges/${id}`);
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -248,7 +248,7 @@ export async function reviewTravelChallenge(
       .eq("travel_challenge_id", id);
   }
 
-  revalidatePath(`/admin/manage/travel-challenges`);
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -358,7 +358,7 @@ export async function addChildChallenge(
   });
 
   if (rwErr) return { error: { _form: [rwErr.message] } };
-  revalidatePath(`/admin/travel-challenges/${travelChallengeId}`);
+  revalidatePath("/admin", "layout");
   return { success: true, id: ch.id };
 }
 
@@ -371,7 +371,7 @@ export async function deleteTravelChallenge(id: string) {
   const query = supabase.from("travel_challenges").delete().eq("id", id);
   const { error } = await (isAdmin ? query : query.eq("merchant_id", gate.user.id));
   if (error) return { error: error.message };
-  revalidatePath("/admin/travel-challenges");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
