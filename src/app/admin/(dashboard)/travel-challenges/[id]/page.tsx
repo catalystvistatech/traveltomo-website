@@ -406,42 +406,46 @@ export default function TravelChallengeDetailPage({
         </div>
       </div>
 
-      {/* Business assignment banner — shown when TC has no business or merchant has multiple */}
-      {businesses.length > 1 && (
-        <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-zinc-300 font-medium">Business</p>
-            <p className="text-xs text-zinc-500">
-              {rec.business_id
-                ? (businesses.find((b) => b.id === (rec.business_id as string))?.name ?? "Assigned")
-                : "Not assigned — stops can be placed anywhere"}
-            </p>
+      {/* Business assignment banner — shown when merchant has multiple businesses */}
+      {businesses.length > 1 && (() => {
+        const assignedBizId = rec.business_id as string | null;
+        const assignedBiz = businesses.find((b) => b.id === assignedBizId);
+        return (
+          <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-zinc-300 font-medium">Business</p>
+              <p className="text-xs text-zinc-500">
+                {assignedBiz ? assignedBiz.name : "Not assigned — stops can be placed anywhere"}
+              </p>
+            </div>
+            <Select
+              value={assignedBizId ?? "none"}
+              onValueChange={async (v) => {
+                const newBizId = v === "none" ? "" : v;
+                const r = await updateTravelChallenge(id, {
+                  title: rec.title as string,
+                  completion_mode: (rec.completion_mode as string) ?? "any",
+                  business_id: newBizId,
+                });
+                if ("error" in r) toast.error("Could not update business assignment");
+                else { toast.success(newBizId ? "Business assigned." : "Business unassigned."); await reload(); }
+              }}
+            >
+              <SelectTrigger className="w-52 bg-zinc-800 border-zinc-700 text-white">
+                <span className="truncate">
+                  {assignedBiz?.name ?? "Assign a business"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (no radius limit)</SelectItem>
+                {businesses.filter((b) => b.verification_status === "approved").map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Select
-            value={(rec.business_id as string) ?? ""}
-            onValueChange={async (v) => {
-              if (!v) return;
-              const r = await updateTravelChallenge(id, {
-                title: rec.title as string,
-                completion_mode: (rec.completion_mode as string) ?? "any",
-                business_id: v,
-              });
-              if ("error" in r) toast.error("Could not update business assignment");
-              else { toast.success("Business assigned."); await reload(); }
-            }}
-          >
-            <SelectTrigger className="w-52 bg-zinc-800 border-zinc-700 text-white">
-              <SelectValue placeholder="Assign a business" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">None (no radius limit)</SelectItem>
-              {businesses.filter((b) => b.verification_status === "approved").map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+        );
+      })()}
 
       {showEdit && (
         <Card className="bg-zinc-900 border-zinc-700">
