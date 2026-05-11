@@ -66,7 +66,7 @@ export async function verifyCompletion(completionId: string) {
     });
   }
 
-  revalidatePath("/admin/completions");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -114,6 +114,6 @@ export async function rejectCompletion(
     });
   }
 
-  revalidatePath("/admin/completions");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }

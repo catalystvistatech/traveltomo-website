@@ -108,7 +108,7 @@ export async function upsertBusiness(
     if (error) return { error: { _form: [error.message] } };
   }
 
-  revalidatePath("/admin/business");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -122,7 +122,7 @@ export async function submitBusinessForVerification(businessId: string) {
     .eq("id", businessId)
     .eq("merchant_id", user.id);
   if (error) return { error: error.message };
-  revalidatePath("/admin/business");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -136,7 +136,7 @@ export async function deleteBusiness(businessId: string) {
     .eq("id", businessId)
     .eq("merchant_id", user.id);
   if (error) return { error: error.message };
-  revalidatePath("/admin/business");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -184,7 +184,7 @@ export async function reviewBusiness(
     })
     .eq("id", businessId);
   if (error) return { error: error.message };
-  revalidatePath("/admin/manage/businesses");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -261,8 +261,7 @@ export async function upsertBusinessAsAdmin(
     if (error) return { error: { _form: [error.message] } };
   }
 
-  revalidatePath(`/admin/manage/merchants/${merchantId}`);
-  revalidatePath("/admin/manage/merchants");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -272,6 +271,6 @@ export async function deleteBusinessAsAdmin(businessId: string) {
   const admin = createAdminClient();
   const { error } = await admin.from("businesses").delete().eq("id", businessId);
   if (error) return { error: error.message };
-  revalidatePath("/admin/manage/merchants");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }

@@ -90,7 +90,7 @@ export async function startSubscription(input: unknown) {
     .single();
 
   if (error) return { error: { _form: [error.message] } };
-  revalidatePath("/admin/promote");
+  revalidatePath("/admin", "layout");
   return {
     success: true,
     id: data.id,
@@ -113,6 +113,6 @@ export async function cancelSubscription(subscriptionId: string) {
     .eq("id", subscriptionId)
     .eq("merchant_id", user.id);
   if (error) return { error: error.message };
-  revalidatePath("/admin/promote");
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
