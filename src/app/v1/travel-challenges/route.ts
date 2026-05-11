@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { createApiClient } from "@/lib/supabase/api";
 
 /**
- * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&radius_km=50
+ * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
  *
- * Returns live travel challenges near a given coordinate, ranked by the
- * distance from their primary business. Challenges beyond `radius_km`
- * are excluded so users only see relevant nearby content.
+ * Returns live travel challenges near a given coordinate. A challenge is
+ * only included when the caller falls within its business's own
+ * `service_radius_meters` — the radius the merchant configured in
+ * Business Profile. The optional `max_radius_km` is a hard ceiling so a
+ * misconfigured 100 km business doesn't pollute everyone's home feed
+ * (defaults to 20 km).
  *
  * Supports cursor-based pagination via `offset` + `limit`.
  */
@@ -16,8 +19,8 @@ export async function GET(request: Request) {
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0") || 0, 0);
-  const radiusKm = parseFloat(searchParams.get("radius_km") ?? "50");
-  const radiusMeters = radiusKm * 1000;
+  const maxRadiusKm = parseFloat(searchParams.get("max_radius_km") ?? "20");
+  const maxRadiusMeters = maxRadiusKm * 1000;
 
   const supabase = createApiClient(request);
 
@@ -28,7 +31,7 @@ export async function GET(request: Request) {
        big_reward_title, big_reward_description, big_reward_discount_type,
        big_reward_discount_value, status, created_at,
        business:businesses!travel_challenges_business_id_fkey (
-         id, name, city, latitude, longitude, establishment_type
+         id, name, city, latitude, longitude, establishment_type, service_radius_meters
        ),
        children:challenges!travel_challenge_id ( id )`
     )
@@ -57,6 +60,7 @@ export async function GET(request: Request) {
           latitude: number | null;
           longitude: number | null;
           establishment_type: string | null;
+          service_radius_meters: number | null;
         }
       | null;
     children: { id: string }[] | null;
@@ -72,6 +76,7 @@ export async function GET(request: Request) {
       hasCoord && blat != null && blng != null
         ? haversine(lat, lng, blat, blng)
         : null;
+    const businessRadius = r.business?.service_radius_meters ?? null;
 
     return {
       id: r.id,
@@ -91,14 +96,21 @@ export async function GET(request: Request) {
       longitude: blng,
       establishment_type: r.business?.establishment_type ?? null,
       distance_meters: distance,
+      service_radius_meters: businessRadius,
     };
   });
 
-  // Filter out challenges beyond the radius when coordinates are provided.
+  // A challenge is in-range when the caller falls within the business's
+  // own service radius (capped by max_radius_km so a 100 km business
+  // doesn't reach into every city). When no coordinate is provided, we
+  // return everything so the screen has *something* to show.
   const filtered = hasCoord
-    ? ranked.filter(
-        (r) => r.distance_meters != null && r.distance_meters <= radiusMeters
-      )
+    ? ranked.filter((r) => {
+        if (r.distance_meters == null) return false;
+        const businessRadius = r.service_radius_meters ?? 2000; // default to 2km
+        const effectiveRadius = Math.min(businessRadius, maxRadiusMeters);
+        return r.distance_meters <= effectiveRadius;
+      })
     : ranked;
 
   filtered.sort((a, b) => {
