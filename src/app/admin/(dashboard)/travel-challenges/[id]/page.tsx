@@ -406,6 +406,43 @@ export default function TravelChallengeDetailPage({
         </div>
       </div>
 
+      {/* Business assignment banner — shown when TC has no business or merchant has multiple */}
+      {businesses.length > 1 && (
+        <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-zinc-300 font-medium">Business</p>
+            <p className="text-xs text-zinc-500">
+              {rec.business_id
+                ? (businesses.find((b) => b.id === (rec.business_id as string))?.name ?? "Assigned")
+                : "Not assigned — stops can be placed anywhere"}
+            </p>
+          </div>
+          <Select
+            value={(rec.business_id as string) ?? ""}
+            onValueChange={async (v) => {
+              if (!v) return;
+              const r = await updateTravelChallenge(id, {
+                title: rec.title as string,
+                completion_mode: (rec.completion_mode as string) ?? "any",
+                business_id: v,
+              });
+              if ("error" in r) toast.error("Could not update business assignment");
+              else { toast.success("Business assigned."); await reload(); }
+            }}
+          >
+            <SelectTrigger className="w-52 bg-zinc-800 border-zinc-700 text-white">
+              <SelectValue placeholder="Assign a business" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None (no radius limit)</SelectItem>
+              {businesses.filter((b) => b.verification_status === "approved").map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {showEdit && (
         <Card className="bg-zinc-900 border-zinc-700">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
