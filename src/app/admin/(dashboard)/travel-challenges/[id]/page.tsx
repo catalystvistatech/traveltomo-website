@@ -43,9 +43,36 @@ import {
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import type { PlacePrediction } from "@/components/business-location-picker";
-import { APIProvider, Map, Marker } from "@vis.gl/react-google-maps";
+import { APIProvider, Map, Marker, useMap } from "@vis.gl/react-google-maps";
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
+
+// Imperatively pans / zooms the map when its target changes (e.g. on search
+// or map click). Kept inside <APIProvider> via useMap() so it can drive the
+// map without forcing it into controlled mode -- this is what lets the user
+// freely drag and pan the map without it snapping back on every re-render.
+function MapPanController({
+  target,
+  zoom,
+}: {
+  target: { lat: number; lng: number };
+  zoom: number;
+}) {
+  const map = useMap();
+  const lastRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
+  useEffect(() => {
+    if (!map) return;
+    const last = lastRef.current;
+    if (!last || last.lat !== target.lat || last.lng !== target.lng) {
+      map.panTo(target);
+    }
+    if (!last || last.zoom !== zoom) {
+      map.setZoom(zoom);
+    }
+    lastRef.current = { lat: target.lat, lng: target.lng, zoom };
+  }, [map, target.lat, target.lng, zoom]);
+  return null;
+}
 
 type TravelChallenge = NonNullable<
   Awaited<ReturnType<typeof getTravelChallenge>>
@@ -118,6 +145,14 @@ export default function TravelChallengeDetailPage({
   const placeQueryRef = useRef(0);
   const placeContainerRef = useRef<HTMLDivElement>(null);
 
+  // Map view target -- only updated when we explicitly want the map to recenter
+  // (search selection, map click, biz defaults). Marker drag does NOT update
+  // this so the user keeps control of the camera.
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
+    lat: 15.1449,
+    lng: 120.5887, // Angeles City default
+  });
+
   async function reload() {
     setTc((await getTravelChallenge(id)) as TravelChallenge);
   }
@@ -125,7 +160,16 @@ export default function TravelChallengeDetailPage({
   useEffect(() => {
     reload();
     listPublishedTemplates().then(setTemplates);
-    getBusiness().then((b) => setBiz(b as Record<string, unknown> | null));
+    getBusiness().then((b) => {
+      setBiz(b as Record<string, unknown> | null);
+      const bizRec = b as Record<string, unknown> | null;
+      if (bizRec?.latitude != null && bizRec?.longitude != null) {
+        setMapCenter({
+          lat: Number(bizRec.latitude),
+          lng: Number(bizRec.longitude),
+        });
+      }
+    });
     listMerchantBusinesses().then(setBusinesses);
   }, [id]);
 
@@ -180,6 +224,7 @@ export default function TravelChallengeDetailPage({
         latitude: String(p.lat),
         longitude: String(p.lng),
       }));
+      setMapCenter({ lat: p.lat, lng: p.lng });
       setPlaceQuery("");
       setShowPlaceResults(false);
       setPlacePredictions([]);
@@ -209,6 +254,12 @@ export default function TravelChallengeDetailPage({
         latitude: String(biz.latitude ?? ""),
         longitude: String(biz.longitude ?? ""),
       }));
+      if (biz.latitude != null && biz.longitude != null) {
+        setMapCenter({
+          lat: Number(biz.latitude),
+          lng: Number(biz.longitude),
+        });
+      }
     }
   }
 
@@ -217,12 +268,6 @@ export default function TravelChallengeDetailPage({
     child.longitude !== "" &&
     Number.isFinite(parseFloat(child.latitude)) &&
     Number.isFinite(parseFloat(child.longitude));
-
-  const mapCenter = hasPin
-    ? { lat: parseFloat(child.latitude), lng: parseFloat(child.longitude) }
-    : biz?.latitude != null && biz?.longitude != null
-      ? { lat: Number(biz.latitude), lng: Number(biz.longitude) }
-      : { lat: 15.1449, lng: 120.5887 }; // Angeles City default
 
   async function handleAddChild() {
     setSaving(true);
@@ -656,22 +701,24 @@ export default function TravelChallengeDetailPage({
                   <Map
                     style={{ width: "100%", height: 300 }}
                     defaultCenter={mapCenter}
-                    center={mapCenter}
                     defaultZoom={hasPin ? 16 : 13}
-                    zoom={hasPin ? 16 : 13}
                     gestureHandling="greedy"
                     disableDefaultUI={false}
                     colorScheme="DARK"
                     onClick={(e) => {
                       if (e.detail.latLng) {
+                        const lat = e.detail.latLng.lat;
+                        const lng = e.detail.latLng.lng;
                         setChild((c) => ({
                           ...c,
-                          latitude: String(e.detail.latLng!.lat),
-                          longitude: String(e.detail.latLng!.lng),
+                          latitude: String(lat),
+                          longitude: String(lng),
                         }));
+                        setMapCenter({ lat, lng });
                       }
                     }}
                   >
+                    <MapPanController target={mapCenter} zoom={hasPin ? 16 : 13} />
                     {hasPin && (
                       <Marker
                         position={{ lat: parseFloat(child.latitude), lng: parseFloat(child.longitude) }}

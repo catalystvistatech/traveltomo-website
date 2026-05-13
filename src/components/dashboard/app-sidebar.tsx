@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Trophy, Gift, BarChart3,
-  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack, Inbox,
+  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack, Inbox, History,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
@@ -20,6 +20,7 @@ const merchantNav = [
   { title: "Travel Challenges", href: "/admin/travel-challenges", icon: Trophy },
   { title: "Template Library", href: "/admin/template-library", icon: FileStack },
   { title: "Verify Completions", href: "/admin/completions", icon: CheckCircle2 },
+  { title: "Claim History", href: "/admin/claims", icon: History },
   { title: "Promote", href: "/admin/promote", icon: Megaphone },
   { title: "Rewards", href: "/admin/rewards", icon: Gift },
   { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
