@@ -132,6 +132,14 @@ export async function updateUserRole(targetUserId: string, role: UserRole) {
   return { success: true };
 }
 
+/**
+ * Approve / reject / suspend a merchant request. The role decision is
+ * written to `public.profiles.role` and `merchant_request_status`, and
+ * every role-based RLS policy reads those columns through
+ * `public.current_user_role()` (migration 016) -- so the change takes
+ * effect on the very next request the affected user makes. No
+ * sign-out, JWT refresh, or session reset is required.
+ */
 export async function reviewMerchantRequest(
   targetUserId: string,
   decision: "approved" | "rejected" | "suspended"

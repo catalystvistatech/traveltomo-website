@@ -134,11 +134,20 @@ export async function createChallenge(payload: {
 
 export async function submitChallengeForReview(challengeId: string) {
   const supabase = await createClient();
+  const now = new Date().toISOString();
+  // Superadmins manage the marketplace and skip the admin review queue
+  // -- their submissions go straight to `live`. Everyone else still
+  // lands in `pending_review` for an admin to approve via
+  // `reviewChallenge()`.
+  const user = await getCurrentUser();
+  const bypass = user?.role === "superadmin";
+
   const { error } = await supabase
     .from("challenges")
     .update({
-      status: "pending_review",
-      submitted_at: new Date().toISOString(),
+      status: bypass ? "live" : "pending_review",
+      submitted_at: now,
+      ...(bypass ? { approved_at: now } : {}),
     })
     .eq("id", challengeId);
 
