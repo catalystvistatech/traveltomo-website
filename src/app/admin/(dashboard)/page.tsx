@@ -76,9 +76,10 @@ export default async function DashboardPage() {
       {user.role === "merchant" && user.merchant_request_status !== "approved" && (
         <Card className="bg-yellow-600/10 border-yellow-600/40">
           <CardContent className="py-4 text-sm text-yellow-200">
-            Your merchant account is <b>pending admin verification</b>. Finish
-            your business profile and submit it &mdash; challenges can&rsquo;t go
-            live until an admin approves you.
+            Your merchant account is <b>pending admin verification</b>.
+            Business profile creation, challenge creation, and promotions all
+            unlock once an admin approves your application. We&rsquo;ll let
+            you know via email and an in-app notification.
           </CardContent>
         </Card>
       )}

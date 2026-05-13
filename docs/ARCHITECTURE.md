@@ -107,8 +107,20 @@ Roles are stored in `profiles.role` and synced to `auth.users.raw_app_meta_data`
 | `user` | Read live challenges/places, submit completions/redemptions |
 | `merchant` | All user abilities + CRUD own business/challenges/rewards |
 | `admin` | All merchant abilities + approve/reject any challenge, manage all merchants/places |
+| `superadmin` | All admin abilities **plus** owns businesses + travel challenges directly, bypasses the verification queue (auto-approved on create, edits stay approved), and is exempt from the paid-promotion gate on the Recommendation Status card |
 
 A new signup always gets `role = 'user'`. Promotion to `merchant` or `admin` is done via direct SQL update on `profiles.role`.
+
+#### Superadmin auto-approval
+
+`superadmin` is the only role that bypasses admin review:
+- `upsertBusiness` writes `verification_status = 'approved'` and stamps `verified_by` on insert, and on update keeps an approved business approved instead of bouncing it back to `pending`.
+- `submitBusinessForVerification` self-approves on submit.
+- `submitChallengeForReview` (standalone) writes `status = 'live'` directly with `approved_at` set, instead of the usual `pending_review`.
+- `createTravelChallenge` accepts any of the superadmin's own businesses regardless of `verification_status`. `submitTravelChallengeForReview` already publishes straight to `live` for every caller.
+- `getRecommendationStatus` skips the "active promotion subscription" blocker for superadmin so their own listings surface to travelers without a paid plan.
+
+The bypass is implemented in application code only; RLS continues to enforce that the row's `merchant_id = auth.uid()` and that the JWT role is one of the allowed ones.
 
 ---
 
@@ -259,6 +271,7 @@ All SQL migrations live in `supabase/` with sequential prefixes:
 | File | Description |
 |------|-------------|
 | `001_schema.sql` | Initial schema: profiles, businesses, places, challenges, rewards, completions, redemptions + all RLS + triggers |
+| `016_realtime_role_check.sql` | Move every role-based RLS policy from `auth.jwt()->'app_metadata'->>'role'` to `public.current_user_role()`, a `SECURITY DEFINER STABLE` helper that reads from `public.profiles`. Eliminates the "merchant just got approved but still gets RLS-denied" class of bug — role changes now propagate to RLS on the very next request without any session refresh. |
 
 When adding new migrations, create `002_description.sql`, `003_description.sql`, etc.
 
@@ -279,3 +292,6 @@ When adding new migrations, create `002_description.sql`, `003_description.sql`,
 | 2026-04-29 | iOS app source of truth at catalystvistatech/traveltomo-ios | Single monorepo, vendor-only remote | Client-owned repo after milestone 1; team control and clear handoff | iOS |
 | 2026-05-13 | `GET /v1/me/rewards` returns the caller's completions + reward detail | Reuse `/v1/redemptions/lookup` (merchant-only), per-challenge fetch | Single round-trip for the iOS "My Rewards" screen; surfaces pending verification codes the user must show the merchant, plus verified/rejected history; reuses existing RLS on `challenge_completions` via the user's JWT | iOS / Android |
 | 2026-05-13 | `/admin/claims` claim-history page + `getMerchantClaimAnalytics` Server Action | Reuse `/admin/completions` (verification-only), single chart library | Merchants need to audit *every* claim (pending, claimed, rejected) with filters + CSV export, not just the pending queue. Analytics action rolls daily counts, per-challenge breakdown, and top customers in one query — no chart dependency added, the bars are inline divs to keep bundle slim | Web |
+| 2026-05-13 | `superadmin` role bypasses business + challenge verification queues | Require superadmins to admin-approve themselves; create a separate `platform` role | Superadmins already have admin powers and own the marketplace; routing their own listings through an admin queue they themselves staff is busywork. RLS still pins ownership via `merchant_id`, and the bypass lives entirely in application code so it stays auditable | Web |
+| 2026-05-13 | Role-based RLS reads from `public.profiles` via `current_user_role()` instead of the JWT `app_metadata` | Force users to log out + back in after a role change; add a client refresh hook; invalidate refresh tokens on every role mutation | The JWT is only refreshed on login or access-token rotation, so admin role promotions weren't visible to RLS until the user re-authed (a "just-approved merchant still can't create challenges" report). Reading the profile through a `STABLE` `SECURITY DEFINER` helper makes role changes propagate immediately and keeps the JWT layer untouched, so existing clients keep working without a forced sign-out | All |
+| 2026-05-13 | Pending merchants (`merchant_request_status != 'approved'`) blocked from all business CRUD | Allow business creation pre-approval as "application material"; rely solely on UI to hide the button; only gate at RLS | Pending merchants could previously submit a business for verification before an admin had even reviewed them, letting unvetted accounts queue verification work. The fix gates `upsertBusiness`, `submitBusinessForVerification`, and `deleteBusiness` at the server-action layer with `assertBusinessWriteAllowed`, and replaces the Business Profile UI with a locked "approval pending" state. Admin / superadmin always pass through | Web |

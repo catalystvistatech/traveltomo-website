@@ -71,14 +71,20 @@ export async function getRecommendationStatus(): Promise<RecommendationStatus> {
     }
   }
 
-  let hasActivePromotion = false;
-  try {
-    const { data: promo } = await supabase.rpc("merchant_has_active_promotion", {
-      p_merchant: user.id,
-    });
-    hasActivePromotion = !!promo;
-  } catch {
-    hasActivePromotion = false;
+  // Superadmins run the platform and don't need a paid promotion to
+  // surface their own businesses to travelers.
+  const bypassPromotion = user.role === "superadmin";
+  let hasActivePromotion = bypassPromotion;
+  if (!bypassPromotion) {
+    try {
+      const { data: promo } = await supabase.rpc(
+        "merchant_has_active_promotion",
+        { p_merchant: user.id },
+      );
+      hasActivePromotion = !!promo;
+    } catch {
+      hasActivePromotion = false;
+    }
   }
 
   const { count: liveCountRaw } = await supabase

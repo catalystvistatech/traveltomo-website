@@ -7,6 +7,7 @@ import {
   getTravelChallenge,
   addChildChallenge,
   removeChildChallenge,
+  updateChildChallenge,
   updateTravelChallenge,
   deleteTravelChallenge,
   submitTravelChallengeForReview,
@@ -114,6 +115,9 @@ export default function TravelChallengeDetailPage({
   const router = useRouter();
   const [tc, setTc] = useState<TravelChallenge | null>(null);
   const [showChild, setShowChild] = useState(false);
+  /// When non-null the child form is editing an existing challenge
+  /// (the value is that challenge's id). When null it's a fresh add.
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [biz, setBiz] = useState<Record<string, unknown> | null>(null);
@@ -286,16 +290,61 @@ export default function TravelChallengeDetailPage({
         ? parseFloat(child.reward_discount_value)
         : undefined,
     };
-    const r = await addChildChallenge(id, payload);
+    const r = editingChildId
+      ? await updateChildChallenge(editingChildId, payload)
+      : await addChildChallenge(id, payload);
     setSaving(false);
     if ("error" in r) {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Challenge added");
+    toast.success(editingChildId ? "Challenge updated" : "Challenge added");
     setShowChild(false);
+    setEditingChildId(null);
     setChild({ ...emptyChild });
     await reload();
+  }
+
+  /// Open the child form in edit mode, prefilled from an existing
+  /// row. We coerce nullable / numeric fields back into the string
+  /// shape the form uses so the inputs render cleanly.
+  function handleEditChild(rec: Record<string, unknown>) {
+    const reward = ((rec.rewards as Record<string, unknown>[] | null) ?? [])[0] ?? null;
+    setChild({
+      title: (rec.title as string) ?? "",
+      description: (rec.description as string) ?? "",
+      instructions: (rec.instructions as string) ?? "",
+      type: ((rec.type as string) ?? "checkin") as typeof emptyChild.type,
+      verification_type: ((rec.verification_type as string) ?? "gps") as typeof emptyChild.verification_type,
+      establishment_type: (rec.establishment_type as EstablishmentType | undefined) ?? undefined,
+      xp_reward: typeof rec.xp_reward === "number" ? (rec.xp_reward as number) : 50,
+      radius_meters: typeof rec.radius_meters === "number" ? (rec.radius_meters as number) : 50,
+      duration_minutes:
+        rec.duration_minutes != null ? String(rec.duration_minutes) : "30",
+      latitude: rec.latitude != null ? String(rec.latitude) : "",
+      longitude: rec.longitude != null ? String(rec.longitude) : "",
+      time_of_day_start: (rec.time_of_day_start as string) ?? "",
+      time_of_day_end: (rec.time_of_day_end as string) ?? "",
+      days_of_week: Array.isArray(rec.days_of_week)
+        ? (rec.days_of_week as number[])
+        : [1, 2, 3, 4, 5, 6, 7],
+      max_completions:
+        rec.max_completions != null ? String(rec.max_completions) : "",
+      reward_title: (reward?.title as string) ?? "",
+      reward_description: (reward?.description as string) ?? "",
+      reward_discount_type: ((reward?.discount_type as string) ?? "freebie") as typeof emptyChild.reward_discount_type,
+      reward_discount_value:
+        reward?.discount_value != null ? String(reward.discount_value) : "",
+    });
+    if (rec.latitude != null && rec.longitude != null) {
+      setMapCenter({
+        lat: Number(rec.latitude),
+        lng: Number(rec.longitude),
+      });
+    }
+    setEditingChildId((rec.id as string) ?? null);
+    setShowChild(true);
+    setShowTemplates(false);
   }
 
   async function handleRemove(childId: string) {
@@ -304,6 +353,12 @@ export default function TravelChallengeDetailPage({
     if ("error" in r) toast.error(r.error as string);
     else {
       toast.success("Removed");
+      // If the deleted challenge was being edited, exit edit mode.
+      if (editingChildId === childId) {
+        setEditingChildId(null);
+        setShowChild(false);
+        setChild({ ...emptyChild });
+      }
       await reload();
     }
   }
@@ -443,9 +498,16 @@ export default function TravelChallengeDetailPage({
           {(status === "draft" || status === "rejected") && (
             <Button
               onClick={handleSubmit}
-              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              disabled={children.length === 0}
+              title={
+                children.length === 0
+                  ? "Add at least one stop before publishing"
+                  : undefined
+              }
+              className="bg-green-600 hover:bg-green-700 text-white gap-2 disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed"
             >
-              <Send className="h-4 w-4" /> Publish
+              <Send className="h-4 w-4" />
+              {children.length === 0 ? "Add a stop to publish" : "Publish"}
             </Button>
           )}
         </div>
@@ -574,8 +636,19 @@ export default function TravelChallengeDetailPage({
       <div className="flex gap-3 items-center">
         <Button
           onClick={() => {
-            setShowChild((v) => !v);
-            setDefaultsFromBiz();
+            // If we're closing or were mid-edit, reset to a fresh
+            // "Add" state so the user doesn't keep the previous edit's
+            // values bleeding into a new stop.
+            if (showChild) {
+              setShowChild(false);
+              setEditingChildId(null);
+              setChild({ ...emptyChild });
+            } else {
+              setEditingChildId(null);
+              setChild({ ...emptyChild });
+              setShowChild(true);
+              setDefaultsFromBiz();
+            }
           }}
           disabled={atStopLimit}
           className="bg-red-600 hover:bg-red-700 text-white gap-2"
@@ -640,7 +713,7 @@ export default function TravelChallengeDetailPage({
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
             <CardTitle className="text-white text-base">
-              Add Challenge to this Set
+              {editingChildId ? "Edit Challenge" : "Add Challenge to this Set"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -887,11 +960,19 @@ export default function TravelChallengeDetailPage({
                 disabled={saving}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                {saving ? "Saving..." : "Add Challenge"}
+                {saving
+                  ? "Saving..."
+                  : editingChildId
+                    ? "Save Changes"
+                    : "Add Challenge"}
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setShowChild(false)}
+                onClick={() => {
+                  setShowChild(false);
+                  setEditingChildId(null);
+                  setChild({ ...emptyChild });
+                }}
                 className="text-zinc-400"
               >
                 Cancel
@@ -918,6 +999,7 @@ export default function TravelChallengeDetailPage({
               const dur = cr.duration_minutes as number | null;
               const rewards = (cr.rewards as Record<string, unknown>[] | null) ?? [];
               const rewardTitle = rewards[0]?.title as string | null;
+              const isEditingThis = editingChildId === cr.id;
               return (
                 <div
                   key={cr.id as string}
@@ -934,19 +1016,36 @@ export default function TravelChallengeDetailPage({
                       >
                         {vType === "gps" ? `GPS · ${dur ?? "?"}min` : vType === "photo_upload" ? "Photo" : (vType ?? "—")}
                       </Badge>
+                      {isEditingThis && (
+                        <Badge className="bg-zinc-700 text-zinc-200 text-[10px]">
+                          Editing
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
                       {rewardTitle ? `Reward: ${rewardTitle}` : "No reward"}
                     </p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleRemove(cr.id as string)}
-                    className="text-zinc-400 hover:text-red-400"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleEditChild(cr)}
+                      className="text-zinc-400 hover:text-white"
+                      title="Edit challenge"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleRemove(cr.id as string)}
+                      className="text-zinc-400 hover:text-red-400"
+                      title="Delete challenge"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}

@@ -6,6 +6,7 @@ import {
   upsertBusiness,
   submitBusinessForVerification,
   deleteBusiness,
+  getBusinessAccessState,
 } from "@/lib/actions/business";
 import {
   Card,
@@ -40,7 +41,7 @@ import {
   BusinessLocationPicker,
   type BusinessLocationValue,
 } from "@/components/business-location-picker";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Store } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Store, Lock, Clock } from "lucide-react";
 
 const DAYS: (keyof BusinessHoursInput)[] = [
   "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
@@ -306,21 +307,38 @@ function BusinessForm({
   );
 }
 
+type AccessState = Awaited<ReturnType<typeof getBusinessAccessState>>;
+
 export default function BusinessPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [access, setAccess] = useState<AccessState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | "new" | null>(null);
   const [deleteTransition, startDelete] = useTransition();
 
   async function reload() {
     setIsLoading(true);
-    setBusinesses(await getBusinesses());
+    const [list, state] = await Promise.all([
+      getBusinesses(),
+      getBusinessAccessState(),
+    ]);
+    setBusinesses(list);
+    setAccess(state);
     setIsLoading(false);
   }
 
   useEffect(() => { reload(); }, []);
 
   if (isLoading) return <PageSkeleton variant="list" />;
+
+  const canWrite = access?.canWrite ?? false;
+
+  // Pending merchants land here without write access. Show a locked
+  // empty-state instead of the form so they can't bypass the gate and
+  // hit a confusing toast on submit.
+  if (!canWrite && access?.reason === "merchant_pending") {
+    return <PendingApprovalLockout merchantStatus={access.merchantStatus} />;
+  }
 
   function handleDelete(id: string, name: string) {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
@@ -340,13 +358,15 @@ export default function BusinessPage() {
             Manage your business listings. Each one can have its own challenges.
           </p>
         </div>
-        <Button
-          onClick={() => setExpandedId(expandedId === "new" ? null : "new")}
-          className="bg-red-600 hover:bg-red-700 text-white"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Business
-        </Button>
+        {canWrite && (
+          <Button
+            onClick={() => setExpandedId(expandedId === "new" ? null : "new")}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Business
+          </Button>
+        )}
       </div>
 
       {/* New business form */}
@@ -442,6 +462,61 @@ export default function BusinessPage() {
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Locked view shown to merchants whose `merchant_request_status` is
+ * still anything other than `approved`. Without this, a freshly
+ * signed-up merchant could fill in the form and submit a business for
+ * verification before an admin had even reviewed them as a merchant --
+ * the security red flag we landed on 2026-05-13.
+ */
+function PendingApprovalLockout({
+  merchantStatus,
+}: {
+  merchantStatus: string | null;
+}) {
+  const isRejected = merchantStatus === "rejected";
+  const isSuspended = merchantStatus === "suspended";
+
+  const headline = isRejected
+    ? "Merchant application rejected"
+    : isSuspended
+      ? "Merchant access suspended"
+      : "Merchant approval pending";
+
+  const description = isRejected
+    ? "An admin reviewed your merchant application and was unable to approve it. Contact support for next steps."
+    : isSuspended
+      ? "Your merchant account is currently suspended. Reach out to support to restore access."
+      : "An admin still has to approve your merchant application. Once they do, you'll be able to create your business profile and submit it for verification.";
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Business Profiles</h1>
+        <p className="text-zinc-400 mt-1">
+          Manage your business listings. Each one can have its own challenges.
+        </p>
+      </div>
+      <Card className="bg-yellow-600/10 border-yellow-600/40">
+        <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-600/20">
+            {isRejected || isSuspended ? (
+              <Lock className="h-6 w-6 text-yellow-300" />
+            ) : (
+              <Clock className="h-6 w-6 text-yellow-300" />
+            )}
+          </div>
+          <h2 className="text-lg font-semibold text-white">{headline}</h2>
+          <p className="max-w-md text-sm text-yellow-100/80">{description}</p>
+          <p className="text-xs text-yellow-200/60">
+            Current status: <span className="font-mono">{merchantStatus ?? "unknown"}</span>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

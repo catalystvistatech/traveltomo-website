@@ -25,6 +25,15 @@ async function assertApprovedMerchant() {
   return { user };
 }
 
+/**
+ * Superadmins run the platform end to end and skip every admin-review
+ * gate -- their businesses auto-approve and their travel challenges go
+ * straight to `live` on submit.
+ */
+function isSuperadmin(role: string | undefined | null): boolean {
+  return role === "superadmin";
+}
+
 async function getApprovedBusiness(userId: string) {
   const supabase = await createClient();
   const { data } = await supabase
@@ -112,9 +121,11 @@ export async function createTravelChallenge(input: unknown) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: { _form: [gate.error] } };
 
-  // If the merchant specified a business_id, verify it belongs to them and is approved.
-  // Otherwise fall back to any approved business.
+  // If the merchant specified a business_id, verify it belongs to them.
+  // Regular merchants must use an approved business; superadmins can use
+  // any business they own (theirs auto-approve on create anyway).
   let selectedBizId: string | null = parsed.data.business_id || null;
+  const bypass = isSuperadmin(gate.user.role);
   if (selectedBizId) {
     const supabaseCheck = await createClient();
     const { data: pickedBiz } = await supabaseCheck
@@ -123,12 +134,18 @@ export async function createTravelChallenge(input: unknown) {
       .eq("id", selectedBizId)
       .eq("merchant_id", gate.user.id)
       .maybeSingle();
-    if (!pickedBiz || pickedBiz.verification_status !== "approved") {
+    if (!pickedBiz) {
+      return { error: { _form: ["The selected business doesn't belong to you."] } };
+    }
+    if (!bypass && pickedBiz.verification_status !== "approved") {
       return { error: { _form: ["The selected business is not verified yet."] } };
     }
   } else {
     const fallback = await getApprovedBusiness(gate.user.id);
-    if (!fallback || fallback.verification_status !== "approved") {
+    if (!fallback) {
+      return { error: { _form: ["Create a business first before adding travel challenges."] } };
+    }
+    if (!bypass && fallback.verification_status !== "approved") {
       return { error: { _form: ["Your business must be verified by an admin before creating travel challenges."] } };
     }
     selectedBizId = fallback.id;
@@ -195,11 +212,39 @@ export async function updateTravelChallenge(id: string, input: unknown) {
   return { success: true };
 }
 
+/**
+ * Publish a travel challenge. Currently every caller (merchant or
+ * superadmin) goes straight to `live` -- the legacy two-stage admin
+ * review for travel challenges has been retired in favour of just
+ * verifying the underlying merchant + business. Superadmins benefit
+ * from this implicitly: their auto-approved business plus this direct
+ * publish means a single click takes them from draft to live.
+ *
+ * Publishing an empty travel challenge is blocked here: travelers
+ * would land on a hollow node tree with nothing to complete, so we
+ * require at least one stop. The UI also disables the Publish
+ * button in this state, but the server check is what actually
+ * enforces the rule against direct API hits.
+ */
 export async function submitTravelChallengeForReview(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
 
   const supabase = await createClient();
+
+  // Require at least one child stop before going live.
+  const { count: stopCount, error: countError } = await supabase
+    .from("challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("travel_challenge_id", id);
+  if (countError) return { error: countError.message };
+  if ((stopCount ?? 0) === 0) {
+    return {
+      error:
+        "Add at least one stop to this travel challenge before publishing.",
+    };
+  }
+
   const now = new Date().toISOString();
 
   const { error } = await supabase
@@ -360,6 +405,118 @@ export async function addChildChallenge(
   if (rwErr) return { error: { _form: [rwErr.message] } };
   revalidatePath("/admin", "layout");
   return { success: true, id: ch.id };
+}
+
+/**
+ * Edit an existing child challenge inside a travel-challenge set.
+ * Mirrors `addChildChallenge` -- same validation, same ownership +
+ * radius checks -- but updates the row instead of inserting a new
+ * one, and updates the linked reward in place (preserving its
+ * `qr_code_value` so any merchant-side QR posters don't break).
+ */
+export async function updateChildChallenge(
+  childId: string,
+  input: unknown
+) {
+  const parsed = childChallengeSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: { _form: [gate.error] } };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("challenges")
+    .select("id, merchant_id, travel_challenge_id")
+    .eq("id", childId)
+    .maybeSingle();
+  if (!existing) return { error: { _form: ["Challenge not found"] } };
+
+  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+  if (!isAdmin && existing.merchant_id !== gate.user.id) {
+    return { error: { _form: ["You don't own this challenge"] } };
+  }
+  if (!existing.travel_challenge_id) {
+    return { error: { _form: ["Challenge is not part of a travel-challenge set"] } };
+  }
+
+  // Mirror the radius constraint from addChildChallenge so editing
+  // can't sneak a stop outside the parent business's service radius.
+  const { data: parent } = await supabase
+    .from("travel_challenges")
+    .select("id, merchant_id, business_id")
+    .eq("id", existing.travel_challenge_id)
+    .maybeSingle();
+  const tcBusinessId =
+    (parent as Record<string, unknown> | null)?.business_id as string | null;
+  if (tcBusinessId) {
+    const allBiz = await getAllBusinesses(existing.merchant_id as string);
+    const linkedBiz = allBiz.find((b) => b.id === tcBusinessId);
+    if (linkedBiz?.latitude != null && linkedBiz?.longitude != null) {
+      const dist = distanceMeters(
+        linkedBiz.latitude!,
+        linkedBiz.longitude!,
+        parsed.data.latitude,
+        parsed.data.longitude
+      );
+      if (dist > (linkedBiz.service_radius_meters ?? 2000)) {
+        return {
+          error: {
+            _form: [
+              `Challenge location is ${Math.round(dist)}m from your business — outside its ${linkedBiz.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
+            ],
+          },
+        };
+      }
+    }
+  }
+
+  const { error: chErr } = await supabase
+    .from("challenges")
+    .update({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      instructions: parsed.data.instructions || null,
+      type: parsed.data.type,
+      verification_type: parsed.data.verification_type,
+      establishment_type: parsed.data.establishment_type ?? null,
+      xp_reward: parsed.data.xp_reward,
+      radius_meters: parsed.data.radius_meters,
+      latitude: parsed.data.latitude,
+      longitude: parsed.data.longitude,
+      duration_minutes: parsed.data.duration_minutes ?? null,
+      time_of_day_start: parsed.data.time_of_day_start || null,
+      time_of_day_end: parsed.data.time_of_day_end || null,
+      days_of_week: parsed.data.days_of_week,
+      max_completions: parsed.data.max_completions ?? null,
+      quiz_question: parsed.data.quiz_question || null,
+      quiz_choices: parsed.data.quiz_choices
+        ? JSON.stringify(parsed.data.quiz_choices)
+        : null,
+      quiz_answer: parsed.data.quiz_answer || null,
+    })
+    .eq("id", childId);
+  if (chErr) return { error: { _form: [chErr.message] } };
+
+  // Update the linked reward in place. Most challenges have a single
+  // reward row; if somehow there are multiple, we update them all so
+  // the user-visible state matches the form (matches the 1:1 contract
+  // the create flow assumes).
+  const { error: rwErr } = await supabase
+    .from("rewards")
+    .update({
+      title: parsed.data.reward_title,
+      description: parsed.data.reward_description || null,
+      discount_type: parsed.data.reward_discount_type,
+      discount_value: parsed.data.reward_discount_value ?? null,
+      max_redemptions: parsed.data.reward_max_redemptions ?? null,
+      expires_at: parsed.data.reward_expires_at || null,
+    })
+    .eq("challenge_id", childId);
+  if (rwErr) return { error: { _form: [rwErr.message] } };
+
+  revalidatePath("/admin", "layout");
+  return { success: true, id: childId };
 }
 
 export async function deleteTravelChallenge(id: string) {
