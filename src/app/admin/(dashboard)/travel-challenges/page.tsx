@@ -400,7 +400,7 @@ export default function TravelChallengesPage() {
           const rec = tc as Record<string, unknown>;
           const count = (rec.challenges as { count: number }[] | undefined)?.[0]
             ?.count ?? 0;
-          const status = rec.status as string;
+          const status = ((rec.status as string | null) ?? "draft");
           return (
             <div key={rec.id as string} className="relative group">
               <Link href={`/admin/travel-challenges/${rec.id}`}>

@@ -56,7 +56,7 @@ export default async function ChallengesPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {challenges.map(
             (challenge: Record<string, unknown>) => {
-              const status = challenge.status as string;
+              const status = (challenge.status as string | null) ?? "draft";
               const places = challenge.places as Record<string, unknown> | null;
               const rewards = challenge.rewards as Record<string, unknown>[] | null;
 
@@ -69,13 +69,13 @@ export default async function ChallengesPage() {
                     <CardHeader className="flex flex-row items-start justify-between">
                       <div className="space-y-1 min-w-0 flex-1">
                         <CardTitle className="text-white truncate">
-                          {challenge.title as string}
+                          {(challenge.title as string | null) ?? "Untitled"}
                         </CardTitle>
                         <p className="text-xs text-zinc-500">
                           {places
                             ? (places.name as string)
                             : "No location"}{" "}
-                          - {challenge.type as string}
+                          - {(challenge.type as string | null) ?? "—"}
                         </p>
                       </div>
                       <Badge
