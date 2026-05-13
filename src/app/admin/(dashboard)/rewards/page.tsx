@@ -94,7 +94,7 @@ export default async function RewardsPage() {
                             : "bg-zinc-700 text-zinc-300"
                         }
                       >
-                        {(challenge.status as string).replace("_", " ")}
+                        {((challenge.status as string | null) ?? "draft").replace("_", " ")}
                       </Badge>
                     )}
                   </div>

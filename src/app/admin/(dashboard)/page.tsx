@@ -32,11 +32,32 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   const isAdmin = user.role === "admin" || user.role === "superadmin";
+
+  // Each action is resilient on its own (returns a default on failure)
+  // but we also defensively wrap them so a single regression can never
+  // crash the dashboard home with a generic "Server Components render"
+  // error.
   const [status, summary, subscription, adminOverview] = await Promise.all([
-    getRecommendationStatus(),
-    getTravelChallengeSummary(),
-    getActiveSubscription(),
-    isAdmin ? getAdminOverview() : Promise.resolve(null),
+    getRecommendationStatus().catch(() => ({
+      isMerchant: false,
+      businessVerified: false,
+      businessVerificationStatus: null,
+      hasLocation: false,
+      hasHours: false,
+      isOpenNow: false,
+      hasActivePromotion: false,
+      liveTravelChallenges: 0,
+      isRecommendable: false,
+      blockers: [] as string[],
+    })),
+    getTravelChallengeSummary().catch(() => ({
+      draft: 0,
+      pending: 0,
+      live: 0,
+      rejected: 0,
+    })),
+    getActiveSubscription().catch(() => null),
+    isAdmin ? getAdminOverview().catch(() => null) : Promise.resolve(null),
   ]);
 
   return (

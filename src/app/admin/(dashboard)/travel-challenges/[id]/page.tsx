@@ -198,7 +198,7 @@ export default function TravelChallengeDetailPage({
   const rec = tc as Record<string, unknown>;
   const children =
     ((rec.challenges as Record<string, unknown>[]) ?? []) ?? [];
-  const status = rec.status as string;
+  const status = ((rec.status as string | null) ?? "draft");
   const MAX_STOPS = 6;
   const atStopLimit = children.length >= MAX_STOPS;
 

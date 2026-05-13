@@ -45,7 +45,7 @@ export default async function ChallengeDetailPage({
     );
   }
 
-  const status = challenge.status as string;
+  const status = ((challenge.status as string | null) ?? "draft");
   const places = challenge.places as Record<string, unknown> | null;
   const rewards = (challenge.rewards ?? []) as Record<string, unknown>[];
 

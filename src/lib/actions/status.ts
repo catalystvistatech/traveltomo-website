@@ -61,16 +61,25 @@ export async function getRecommendationStatus(): Promise<RecommendationStatus> {
 
   let isOpenNow = false;
   if (biz?.id) {
-    const { data: openResult } = await supabase.rpc("merchant_is_open_now", {
-      p_business_id: biz.id,
-    });
-    isOpenNow = !!openResult;
+    try {
+      const { data: openResult } = await supabase.rpc("merchant_is_open_now", {
+        p_business_id: biz.id,
+      });
+      isOpenNow = !!openResult;
+    } catch {
+      isOpenNow = false;
+    }
   }
 
-  const { data: promo } = await supabase.rpc("merchant_has_active_promotion", {
-    p_merchant: user.id,
-  });
-  const hasActivePromotion = !!promo;
+  let hasActivePromotion = false;
+  try {
+    const { data: promo } = await supabase.rpc("merchant_has_active_promotion", {
+      p_merchant: user.id,
+    });
+    hasActivePromotion = !!promo;
+  } catch {
+    hasActivePromotion = false;
+  }
 
   const { count: liveCountRaw } = await supabase
     .from("travel_challenges")
