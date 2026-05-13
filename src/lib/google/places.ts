@@ -65,7 +65,6 @@ export interface NormalizedPlace {
 interface GooglePlaceNew {
   id: string;
   displayName?: { text?: string };
-  formattedAddress?: string;
   shortFormattedAddress?: string;
   location?: { latitude?: number; longitude?: number };
   types?: string[];
@@ -85,12 +84,27 @@ interface GoogleNearbyResponseNew {
   places?: GooglePlaceNew[];
 }
 
-// Field mask tells Google which fields we want back. Billed per field
-// class - keep this tight.
+// Field mask tells Google which fields we want back. The Places API
+// (New) bills per field tier and the *highest* tier requested
+// determines the SKU for the whole call:
+//
+//   Pro                  (~$32/1k): id, displayName, formattedAddress,
+//                                   location, types, primaryType,
+//                                   businessStatus, addressComponents
+//   Enterprise           (~$35/1k): + opening hours, websites, phone
+//   Enterprise+Atmosphere(~$47/1k): + photos, rating, userRatingCount,
+//                                   reviews, editorialSummary
+//
+// We need `photos`, `rating`, and `userRatingCount` for the home feed
+// cards and quality filtering, so this stack pays the Enterprise+
+// Atmosphere SKU. The real cost lever is the 24-hour Postgres cache
+// in placesCache.ts -- it keeps these requests rare even at scale.
+//
+// Trimmed: `formattedAddress` was redundant with `shortFormattedAddress`
+// (we only ever read the short variant in `normalize()`).
 const FIELD_MASK = [
   "places.id",
   "places.displayName",
-  "places.formattedAddress",
   "places.shortFormattedAddress",
   "places.location",
   "places.types",
@@ -172,8 +186,7 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
     // `mirrorPlaces` replaces this with the Supabase UUID.
     id: result.id,
     name: result.displayName?.text ?? "Unnamed place",
-    description:
-      result.shortFormattedAddress ?? result.formattedAddress ?? null,
+    description: result.shortFormattedAddress ?? null,
     latitude: lat,
     longitude: lng,
     category: categoryFromTypes(result.primaryType, result.types),
