@@ -141,7 +141,9 @@ A new signup always gets `role = 'user'`. Promotion to `merchant` or `admin` is 
   challenges/new/     -- 5-step creation wizard
   challenges/[id]/    -- Challenge detail + edit
   rewards/            -- Reward management
-  analytics/          -- Completions, redemptions, conversion
+  completions/        -- Pending verification queue
+  claims/             -- Full claim history (filters + CSV export)
+  analytics/          -- Stacked daily chart, top challenges, top travelers
   admin/challenges/   -- Approval queue (admin only)
   admin/merchants/    -- Merchant list (admin only)
   admin/places/       -- POI management (admin only)
@@ -275,3 +277,5 @@ When adding new migrations, create `002_description.sql`, `003_description.sql`,
 | 2026-04-19 | MapKit + bundled assets for iOS imagery | Google Places API | Zero cost, no 3rd-party disclosure, covers MVP scope | iOS |
 | 2026-04-19 | Hide Facebook auth behind feature flag | Delete or fully implement | 1-line re-enable vs reimplementation | iOS |
 | 2026-04-29 | iOS app source of truth at catalystvistatech/traveltomo-ios | Single monorepo, vendor-only remote | Client-owned repo after milestone 1; team control and clear handoff | iOS |
+| 2026-05-13 | `GET /v1/me/rewards` returns the caller's completions + reward detail | Reuse `/v1/redemptions/lookup` (merchant-only), per-challenge fetch | Single round-trip for the iOS "My Rewards" screen; surfaces pending verification codes the user must show the merchant, plus verified/rejected history; reuses existing RLS on `challenge_completions` via the user's JWT | iOS / Android |
+| 2026-05-13 | `/admin/claims` claim-history page + `getMerchantClaimAnalytics` Server Action | Reuse `/admin/completions` (verification-only), single chart library | Merchants need to audit *every* claim (pending, claimed, rejected) with filters + CSV export, not just the pending queue. Analytics action rolls daily counts, per-challenge breakdown, and top customers in one query — no chart dependency added, the bars are inline divs to keep bundle slim | Web |
