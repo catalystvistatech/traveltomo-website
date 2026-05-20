@@ -30,6 +30,11 @@ export async function GET(request: Request) {
   const allowedStatuses = new Set(["pending", "verified", "rejected"]);
   const status = statusParam && allowedStatuses.has(statusParam) ? statusParam : null;
 
+  // `challenges` does not have a direct FK to `businesses` (its only
+  // owner reference is `merchant_id -> profiles.id`), so PostgREST
+  // cannot embed `business:businesses(...)` here. We resolve the
+  // business via `businesses.merchant_id` in a second query and merge
+  // it in below.
   let query = client
     .from("challenge_completions")
     .select(
@@ -37,7 +42,6 @@ export async function GET(request: Request) {
        rejection_reason, reward_released, proof_url,
        challenge:challenges!inner (
          id, title, merchant_id, xp_reward,
-         business:businesses ( id, name, city ),
          rewards ( id, title, description, discount_type, discount_value )
        )`
     )
@@ -53,18 +57,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: listError.message }, { status: 500 });
   }
 
-  // Normalise the joined shape into a flat, iOS-friendly envelope so the
-  // client doesn't have to traverse nested arrays. The DB returns
-  // `rewards` as an array since it's a 1:N relation on challenges;
-  // we surface the first active reward only (challenges typically have
-  // exactly one).
   type Row = NonNullable<typeof data>[number] & {
     challenge?: {
       id: string;
       title: string;
       merchant_id: string | null;
       xp_reward: number | null;
-      business: { id: string; name: string; city: string | null } | null;
       rewards:
         | Array<{
             id: string;
@@ -79,8 +77,37 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as Row[];
 
+  // Resolve `merchant_id -> businesses` in a single follow-up query.
+  // Most travelers only have a handful of distinct merchants in their
+  // history so this stays a small `IN (?)` lookup.
+  const merchantIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.challenge?.merchant_id)
+        .filter((id): id is string => typeof id === "string")
+    )
+  );
+
+  type BusinessRow = { id: string; merchant_id: string; name: string; city: string | null };
+  let businessesByMerchant = new Map<string, BusinessRow>();
+  if (merchantIds.length > 0) {
+    const { data: businessRows, error: businessError } = await client
+      .from("businesses")
+      .select("id, merchant_id, name, city")
+      .in("merchant_id", merchantIds);
+    if (businessError) {
+      return NextResponse.json({ error: businessError.message }, { status: 500 });
+    }
+    businessesByMerchant = new Map(
+      (businessRows ?? []).map((b) => [b.merchant_id, b as BusinessRow])
+    );
+  }
+
   const result = rows.map((row) => {
     const reward = row.challenge?.rewards?.[0] ?? null;
+    const business = row.challenge?.merchant_id
+      ? businessesByMerchant.get(row.challenge.merchant_id) ?? null
+      : null;
     return {
       id: row.id,
       verification_status: row.verification_status,
@@ -94,8 +121,8 @@ export async function GET(request: Request) {
             id: row.challenge.id,
             title: row.challenge.title,
             xp_reward: row.challenge.xp_reward,
-            business_name: row.challenge.business?.name ?? null,
-            business_city: row.challenge.business?.city ?? null,
+            business_name: business?.name ?? null,
+            business_city: business?.city ?? null,
           }
         : null,
       reward: reward

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emitNotification } from "@/lib/notifications/emit";
+import { syncTravelChallengeProgressCompletion } from "@/lib/challenge-progress";
 
 /**
  * POST /v1/redemptions/verify
@@ -44,8 +45,8 @@ export async function POST(request: Request) {
   const { data: completion, error: fetchError } = await admin
     .from("challenge_completions")
     .select(
-      `id, user_id, challenge_id, verification_status,
-       challenge:challenges!inner ( id, title, merchant_id )`
+      `id, user_id, challenge_id, verification_status, travel_challenge_progress_id,
+       challenge:challenges!inner ( id, title, merchant_id, travel_challenge_id )`
     )
     .eq("verification_code", code)
     .maybeSingle();
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
     id: string;
     title: string;
     merchant_id: string;
+    travel_challenge_id: string | null;
   };
   const isAdmin = role === "admin" || role === "superadmin";
   if (!isAdmin && challenge.merchant_id !== user.id) {
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
     verified_by: user.id,
     reward_released: !isReject,
     rejection_reason: isReject ? reason : null,
+    player_status: isReject ? "forfeited" : "claimed",
   };
 
   const { error: updateError } = await admin
@@ -97,6 +100,19 @@ export async function POST(request: Request) {
     .eq("id", completion.id);
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  if (
+    !isReject &&
+    challenge.travel_challenge_id &&
+    completion.travel_challenge_progress_id
+  ) {
+    await syncTravelChallengeProgressCompletion(
+      admin,
+      completion.user_id,
+      challenge.travel_challenge_id,
+      completion.travel_challenge_progress_id as string
+    );
   }
 
   await emitNotification({

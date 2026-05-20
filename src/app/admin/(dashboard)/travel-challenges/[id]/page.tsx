@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import {
   ESTABLISHMENT_LABELS,
   ESTABLISHMENT_TYPES,
+  TRAVEL_CHALLENGE_STOP_COUNT,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X } from "lucide-react";
@@ -248,8 +249,12 @@ export default function TravelChallengeDetailPage({
   const children =
     ((rec.challenges as Record<string, unknown>[]) ?? []) ?? [];
   const status = ((rec.status as string | null) ?? "draft");
-  const MAX_STOPS = 6;
-  const atStopLimit = children.length >= MAX_STOPS;
+  const atStopLimit = children.length >= TRAVEL_CHALLENGE_STOP_COUNT;
+  const canPublish = children.length >= TRAVEL_CHALLENGE_STOP_COUNT;
+  const stopsUntilPublish = Math.max(
+    0,
+    TRAVEL_CHALLENGE_STOP_COUNT - children.length
+  );
 
   function setDefaultsFromBiz() {
     if (biz) {
@@ -498,16 +503,18 @@ export default function TravelChallengeDetailPage({
           {(status === "draft" || status === "rejected") && (
             <Button
               onClick={handleSubmit}
-              disabled={children.length === 0}
+              disabled={!canPublish}
               title={
-                children.length === 0
-                  ? "Add at least one stop before publishing"
+                !canPublish
+                  ? `Add ${stopsUntilPublish} more stop${stopsUntilPublish === 1 ? "" : "s"} to reach ${TRAVEL_CHALLENGE_STOP_COUNT} before publishing`
                   : undefined
               }
               className="bg-green-600 hover:bg-green-700 text-white gap-2 disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed"
             >
               <Send className="h-4 w-4" />
-              {children.length === 0 ? "Add a stop to publish" : "Publish"}
+              {canPublish
+                ? "Publish"
+                : `${children.length}/${TRAVEL_CHALLENGE_STOP_COUNT} stops to publish`}
             </Button>
           )}
         </div>
@@ -656,7 +663,13 @@ export default function TravelChallengeDetailPage({
           <Plus className="h-4 w-4" /> Add Stop
         </Button>
         <span className="text-xs text-zinc-500">
-          {children.length}/{MAX_STOPS} stops
+          {children.length}/{TRAVEL_CHALLENGE_STOP_COUNT} stops
+          {!canPublish && (status === "draft" || status === "rejected") ? (
+            <span className="text-zinc-400">
+              {" "}
+              · {stopsUntilPublish} more needed to publish
+            </span>
+          ) : null}
         </span>
         <Button
           variant="outline"

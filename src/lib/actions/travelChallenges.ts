@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import {
   travelChallengeSchema,
   childChallengeSchema,
+  TRAVEL_CHALLENGE_STOP_COUNT,
 } from "@/lib/validations/marketplace";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
@@ -32,6 +33,12 @@ async function assertApprovedMerchant() {
  */
 function isSuperadmin(role: string | undefined | null): boolean {
   return role === "superadmin";
+}
+
+function travelChallengePublishStopError(stopCount: number): string | null {
+  if (stopCount >= TRAVEL_CHALLENGE_STOP_COUNT) return null;
+  const remaining = TRAVEL_CHALLENGE_STOP_COUNT - stopCount;
+  return `Travel challenges need ${TRAVEL_CHALLENGE_STOP_COUNT} stops before publishing (matches the dice roll board). Add ${remaining} more stop${remaining === 1 ? "" : "s"}.`;
 }
 
 async function getApprovedBusiness(userId: string) {
@@ -220,11 +227,10 @@ export async function updateTravelChallenge(id: string, input: unknown) {
  * from this implicitly: their auto-approved business plus this direct
  * publish means a single click takes them from draft to live.
  *
- * Publishing an empty travel challenge is blocked here: travelers
- * would land on a hollow node tree with nothing to complete, so we
- * require at least one stop. The UI also disables the Publish
- * button in this state, but the server check is what actually
- * enforces the rule against direct API hits.
+ * Publishing is blocked until the set has exactly
+ * {@link TRAVEL_CHALLENGE_STOP_COUNT} stops — the same count the iOS
+ * dice roll board expects. The UI disables Publish below that
+ * threshold; this server check enforces it against direct API hits.
  */
 export async function submitTravelChallengeForReview(id: string) {
   const gate = await assertApprovedMerchant();
@@ -232,18 +238,13 @@ export async function submitTravelChallengeForReview(id: string) {
 
   const supabase = await createClient();
 
-  // Require at least one child stop before going live.
   const { count: stopCount, error: countError } = await supabase
     .from("challenges")
     .select("id", { count: "exact", head: true })
     .eq("travel_challenge_id", id);
   if (countError) return { error: countError.message };
-  if ((stopCount ?? 0) === 0) {
-    return {
-      error:
-        "Add at least one stop to this travel challenge before publishing.",
-    };
-  }
+  const publishStopError = travelChallengePublishStopError(stopCount ?? 0);
+  if (publishStopError) return { error: publishStopError };
 
   const now = new Date().toISOString();
 
@@ -276,6 +277,17 @@ export async function reviewTravelChallenge(
     return { error: "Only admins/superadmins can review" };
   }
   const admin = createAdminClient();
+
+  if (action === "approved") {
+    const { count: stopCount, error: countError } = await admin
+      .from("challenges")
+      .select("id", { count: "exact", head: true })
+      .eq("travel_challenge_id", id);
+    if (countError) return { error: countError.message };
+    const publishStopError = travelChallengePublishStopError(stopCount ?? 0);
+    if (publishStopError) return { error: publishStopError };
+  }
+
   const { error } = await admin
     .from("travel_challenges")
     .update({
@@ -322,8 +334,14 @@ export async function addChildChallenge(
     .from("challenges")
     .select("id", { count: "exact", head: true })
     .eq("travel_challenge_id", travelChallengeId);
-  if ((count ?? 0) >= 6) {
-    return { error: { _form: ["Maximum 6 stops per travel challenge."] } };
+  if ((count ?? 0) >= TRAVEL_CHALLENGE_STOP_COUNT) {
+    return {
+      error: {
+        _form: [
+          `Maximum ${TRAVEL_CHALLENGE_STOP_COUNT} stops per travel challenge.`,
+        ],
+      },
+    };
   }
 
   const biz = await getApprovedBusiness(parent.merchant_id);

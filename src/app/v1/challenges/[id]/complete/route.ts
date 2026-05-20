@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import {
+  syncTravelChallengeProgressCompletion,
+} from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,6 +33,7 @@ export async function POST(request: Request, { params }: Params) {
       verification_status: "pending",
       verification_code: code,
       completed_at: new Date().toISOString(),
+      player_status: "submitted",
       gps_latitude: body.gps_latitude ?? null,
       gps_longitude: body.gps_longitude ?? null,
       proof_url: body.proof_url ?? null,
