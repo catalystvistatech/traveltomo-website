@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { createApiClient } from "@/lib/supabase/api";
+import { createApiClient, requireUser } from "@/lib/supabase/api";
+import {
+  derivePlayerStopStatus,
+  isChallengeExcludedFromNearbyPool,
+} from "@/lib/challenge-progress";
 
 /**
  * GET /v1/recommendations?lat=..&lng=..&types=restaurant,cafe&limit=50
@@ -26,6 +30,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = createApiClient(request);
+  const auth = await requireUser(request);
 
   let query = supabase
     .from("recommended_challenges")
@@ -82,9 +87,52 @@ export async function GET(request: Request) {
     return da - db;
   });
 
+  let pool = inRange;
+
+  if (auth.user) {
+    const ids = inRange.map((r) => r.id as string);
+    const completionByChallenge = new Map<
+      string,
+      {
+        id: string;
+        player_status: string;
+        completed_at: string | null;
+        verification_status: string;
+        reward_released: boolean | null;
+        expires_at: string | null;
+        accepted_at: string | null;
+      }
+    >();
+
+    if (ids.length > 0) {
+      const { data: completions } = await auth.client
+        .from("challenge_completions")
+        .select(
+          "id, challenge_id, player_status, completed_at, verification_status, reward_released, expires_at, accepted_at"
+        )
+        .eq("user_id", auth.user.id)
+        .in("challenge_id", ids)
+        .order("accepted_at", { ascending: false });
+
+      for (const row of completions ?? []) {
+        const cid = row.challenge_id as string;
+        if (!completionByChallenge.has(cid)) {
+          completionByChallenge.set(cid, row);
+        }
+      }
+    }
+
+    pool = inRange.filter((r) => {
+      const status = derivePlayerStopStatus(
+        completionByChallenge.get(r.id as string) ?? null
+      );
+      return !isChallengeExcludedFromNearbyPool(status);
+    });
+  }
+
   return NextResponse.json({
-    data: inRange.slice(0, limit),
-    count: Math.min(inRange.length, limit),
+    data: pool.slice(0, limit),
+    count: Math.min(pool.length, limit),
   });
 }
 

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { createApiClient } from "@/lib/supabase/api";
+import { createApiClient, requireUser } from "@/lib/supabase/api";
+import {
+  buildTravelProgressPayload,
+  derivePlayerStopStatus,
+  loadActiveTravelProgress,
+  loadStopCompletionsForTravelChallenge,
+} from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,12 +14,13 @@ type Params = { params: Promise<{ id: string }> };
  *
  * Returns a single live travel challenge with its full list of child
  * challenges so the iOS Challenge Map can render the route as real nodes.
- * Each child ships with coordinates (falling back to the business location
- * when the challenge itself doesn't carry a pin).
+ * When the caller is authenticated, each child includes `player_status`
+ * and a `progress` summary for the user's active session on this set.
  */
 export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
   const supabase = createApiClient(request);
+  const auth = await requireUser(request);
 
   const { data, error } = await supabase
     .from("travel_challenges")
@@ -104,12 +111,41 @@ export async function GET(request: Request, { params }: Params) {
   const businessLat = row.business?.latitude ?? null;
   const businessLng = row.business?.longitude ?? null;
 
-  const children = (row.children ?? [])
-    .filter((c) => c.status === "live" || c.status === "approved")
+  const liveChildren = (row.children ?? []).filter(
+    (c) => c.status === "live" || c.status === "approved"
+  );
+
+  let completionsByChallenge = new Map<
+    string,
+    {
+      id: string;
+      player_status: string;
+      completed_at: string | null;
+      verification_status: string;
+      reward_released: boolean | null;
+      expires_at: string | null;
+      accepted_at: string | null;
+    }
+  >();
+  let progress = null;
+
+  if (auth.user) {
+    completionsByChallenge = await loadStopCompletionsForTravelChallenge(
+      auth.client,
+      auth.user.id,
+      id
+    );
+    progress = await loadActiveTravelProgress(auth.client, auth.user.id, id);
+  }
+
+  const childIds = liveChildren.map((c) => c.id);
+
+  const children = liveChildren
     .map((c) => {
       const lat = c.latitude ?? c.place?.latitude ?? businessLat;
       const lng = c.longitude ?? c.place?.longitude ?? businessLng;
       const reward = c.rewards?.[0] ?? null;
+      const completion = completionsByChallenge.get(c.id) ?? null;
       return {
         id: c.id,
         title: c.title,
@@ -117,7 +153,8 @@ export async function GET(request: Request, { params }: Params) {
         instructions: c.instructions,
         type: c.type,
         verification_type: c.verification_type,
-        establishment_type: c.establishment_type ?? row.business?.establishment_type ?? null,
+        establishment_type:
+          c.establishment_type ?? row.business?.establishment_type ?? null,
         xp_reward: c.xp_reward,
         radius_meters: c.radius_meters,
         duration_minutes: c.duration_minutes,
@@ -128,6 +165,9 @@ export async function GET(request: Request, { params }: Params) {
         reward_title: reward?.title ?? null,
         reward_description: reward?.description ?? null,
         reward_qr_code: reward?.qr_code_value ?? null,
+        player_status: auth.user
+          ? derivePlayerStopStatus(completion)
+          : "available",
       };
     })
     .filter((c) => c.latitude != null && c.longitude != null);
@@ -150,6 +190,9 @@ export async function GET(request: Request, { params }: Params) {
       business_latitude: businessLat,
       business_longitude: businessLng,
       establishment_type: row.business?.establishment_type ?? null,
+      progress: auth.user
+        ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
+        : null,
       children,
     },
   });

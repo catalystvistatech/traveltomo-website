@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 
 type Row = Record<string, unknown> & {
   id: string;
@@ -99,6 +100,7 @@ export default function ManageTravelChallengesPage() {
             const childCount = Array.isArray(r.challenges)
               ? (r.challenges[0]?.count ?? 0)
               : 0;
+            const canApprove = childCount >= TRAVEL_CHALLENGE_STOP_COUNT;
             return (
               <Card key={r.id} className="bg-zinc-900 border-zinc-800">
                 <CardHeader>
@@ -118,7 +120,10 @@ export default function ManageTravelChallengesPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-3 text-sm sm:grid-cols-4">
-                    <Field label="Child challenges" value={String(childCount)} />
+                    <Field
+                      label="Child challenges"
+                      value={`${childCount}/${TRAVEL_CHALLENGE_STOP_COUNT}`}
+                    />
                     <Field
                       label="Completion mode"
                       value={(r.completion_mode as string) ?? "any"}
@@ -157,11 +162,25 @@ export default function ManageTravelChallengesPage() {
                     className="bg-zinc-800 border-zinc-700 text-white"
                   />
 
+                  {!canApprove ? (
+                    <p className="text-sm text-amber-400/90">
+                      Needs {TRAVEL_CHALLENGE_STOP_COUNT - childCount} more stop
+                      {TRAVEL_CHALLENGE_STOP_COUNT - childCount === 1 ? "" : "s"}{" "}
+                      before approval — travel challenges must have{" "}
+                      {TRAVEL_CHALLENGE_STOP_COUNT} stops for dice rolls.
+                    </p>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-2">
                     <Button
                       onClick={() => handleReview(r.id, "approved")}
-                      disabled={pending}
-                      className="bg-green-600 hover:bg-green-700"
+                      disabled={pending || !canApprove}
+                      title={
+                        !canApprove
+                          ? `${TRAVEL_CHALLENGE_STOP_COUNT} stops required before publishing`
+                          : undefined
+                      }
+                      className="bg-green-600 hover:bg-green-700 disabled:bg-zinc-700 disabled:text-zinc-400"
                     >
                       Approve & Publish
                     </Button>

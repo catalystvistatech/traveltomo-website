@@ -14,6 +14,9 @@ export const ESTABLISHMENT_TYPES = [
 
 export type EstablishmentType = (typeof ESTABLISHMENT_TYPES)[number];
 
+/** Travel challenge sets are fixed at six stops — matches the iOS dice roll board. */
+export const TRAVEL_CHALLENGE_STOP_COUNT = 6;
+
 export const ESTABLISHMENT_LABELS: Record<EstablishmentType, string> = {
   restaurant: "Restaurant",
   cafe: "Cafe",
