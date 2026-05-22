@@ -34,6 +34,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  // Big-reward claim codes (`TT-BR-*`) live on travel_challenge_progress,
+  // not challenge_completions. Surface enough fields for the merchant
+  // scanner to display the BIG REWARD title before approving.
+  if (code.startsWith("TT-BR-")) {
+    return await lookupBigRewardClaim({
+      code,
+      merchantUserId: user.id,
+      role,
+      admin,
+    });
+  }
+
   const { data, error } = await admin
     .from("challenge_completions")
     .select(
@@ -64,4 +76,47 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ data });
+}
+
+type BigRewardLookupArgs = {
+  code: string;
+  merchantUserId: string;
+  role: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any;
+};
+
+async function lookupBigRewardClaim(args: BigRewardLookupArgs) {
+  const { code, merchantUserId, role, admin } = args;
+  const { data, error } = await admin
+    .from("travel_challenge_progress")
+    .select(
+      `id, user_id, status, completed_at, big_reward_claim_code, big_reward_redeemed_at,
+       user:profiles!travel_challenge_progress_user_id_fkey ( id, display_name ),
+       travel_challenge:travel_challenges!inner (
+         id, merchant_id, title, big_reward_title, big_reward_description,
+         big_reward_discount_type, big_reward_discount_value
+       )`
+    )
+    .eq("big_reward_claim_code", code)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const travelChallenge = (data as Record<string, unknown>).travel_challenge as {
+    merchant_id?: string;
+  } | null;
+  const isAdmin = role === "admin" || role === "superadmin";
+  if (!isAdmin && travelChallenge?.merchant_id !== merchantUserId) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  return NextResponse.json({
+    data: { ...data, kind: "big_reward" },
+  });
 }

@@ -4,6 +4,7 @@ export type NotificationKind =
   | "challenge_unlocked"
   | "challenge_verified"
   | "reward_ready"
+  | "big_reward_redeemed"
   | "merchant_status"
   | "system";
 
