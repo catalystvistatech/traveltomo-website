@@ -42,6 +42,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  // Big-reward claim codes start with `TT-BR-`. They live on
+  // `travel_challenge_progress`, not on individual completions, so we
+  // dispatch to a dedicated handler that flips the redemption flag and
+  // notifies the player that the merchant has handed over the prize.
+  if (code.startsWith("TT-BR-")) {
+    return await handleBigRewardClaim({
+      code,
+      reject: !!body.reject,
+      reason: (body.reason ?? "").trim() || null,
+      merchantUserId: user.id,
+      role,
+      admin,
+    });
+  }
+
   const { data: completion, error: fetchError } = await admin
     .from("challenge_completions")
     .select(
@@ -134,6 +149,99 @@ export async function POST(request: Request) {
     data: {
       completion_id: completion.id,
       status: isReject ? "rejected" : "verified",
+    },
+  });
+}
+
+type BigRewardArgs = {
+  code: string;
+  reject: boolean;
+  reason: string | null;
+  merchantUserId: string;
+  role: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any;
+};
+
+async function handleBigRewardClaim(args: BigRewardArgs) {
+  const { code, reject, reason, merchantUserId, role, admin } = args;
+  const isAdmin = role === "admin" || role === "superadmin";
+
+  const { data: row, error: fetchError } = await admin
+    .from("travel_challenge_progress")
+    .select(
+      `id, user_id, status, completed_at, big_reward_redeemed_at, big_reward_redeemed_by,
+       travel_challenge_id,
+       travel_challenge:travel_challenges!inner (
+         id, merchant_id, title, big_reward_title
+       )`
+    )
+    .eq("big_reward_claim_code", code)
+    .maybeSingle();
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+  if (!row) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const travelChallenge = (row as Record<string, unknown>).travel_challenge as {
+    id: string;
+    merchant_id: string;
+    title: string;
+    big_reward_title: string | null;
+  };
+
+  if (!isAdmin && travelChallenge.merchant_id !== merchantUserId) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  if (row.status !== "completed") {
+    return NextResponse.json(
+      { error: "quest_not_completed" },
+      { status: 409 }
+    );
+  }
+  if (row.big_reward_redeemed_at) {
+    return NextResponse.json({ error: "already_redeemed" }, { status: 409 });
+  }
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("travel_challenge_progress")
+    .update({
+      big_reward_redeemed_at: reject ? null : now,
+      big_reward_redeemed_by: reject ? null : merchantUserId,
+      status: reject ? row.status : "completed",
+      updated_at: now,
+    })
+    .eq("id", row.id);
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  await emitNotification({
+    userId: row.user_id,
+    kind: "big_reward_redeemed",
+    title: reject ? "Big reward declined" : "Big reward redeemed",
+    body: reject
+      ? `Your big reward for "${travelChallenge.title}" was declined${reason ? `: ${reason}` : "."}`
+      : `${travelChallenge.big_reward_title ?? "Your big reward"} has been redeemed at "${travelChallenge.title}".`,
+    icon: reject ? "xmark.seal.fill" : "trophy.fill",
+    metadata: {
+      progress_id: row.id,
+      travel_challenge_id: travelChallenge.id,
+      reason,
+    },
+  });
+
+  return NextResponse.json({
+    data: {
+      progress_id: row.id,
+      travel_challenge_id: travelChallenge.id,
+      status: reject ? "rejected" : "redeemed",
+      kind: "big_reward",
     },
   });
 }
