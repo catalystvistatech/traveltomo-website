@@ -95,7 +95,9 @@ export async function loadActiveTravelProgress(
 ) {
   const { data } = await client
     .from("travel_challenge_progress")
-    .select("id, status, started_at, completed_at, expires_at")
+    .select(
+      "id, status, started_at, completed_at, expires_at, skips_used, skips_limit"
+    )
     .eq("user_id", userId)
     .eq("travel_challenge_id", travelChallengeId)
     .eq("status", "active")
@@ -123,7 +125,9 @@ export async function ensureTravelChallengeProgress(
       travel_challenge_id: travelChallengeId,
       status: "active",
     })
-    .select("id, status, started_at, completed_at, expires_at")
+    .select(
+      "id, status, started_at, completed_at, expires_at, skips_used, skips_limit"
+    )
     .single();
 
   if (error) throw error;
@@ -177,6 +181,8 @@ export function buildTravelProgressPayload(
     started_at: string;
     completed_at: string | null;
     expires_at: string | null;
+    skips_used?: number | null;
+    skips_limit?: number | null;
   } | null,
   childIds: string[],
   completions: Map<string, CompletionRow>
@@ -198,6 +204,8 @@ export function buildTravelProgressPayload(
         claimed_stops: claimedStops,
         ongoing_stops: ongoingStops,
         available_stops: stopStatuses.filter((s) => s === "available").length,
+        skips_used: progress.skips_used ?? 0,
+        skips_limit: progress.skips_limit ?? 3,
       }
     : null;
 }
