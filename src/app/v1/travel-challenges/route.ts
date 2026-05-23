@@ -121,12 +121,25 @@ export async function GET(request: Request) {
 
   const page = filtered.slice(offset, offset + limit);
 
-  return NextResponse.json({
-    data: page,
-    count: page.length,
-    total: filtered.length,
-    has_more: offset + limit < filtered.length,
-  });
+  return NextResponse.json(
+    {
+      data: page,
+      count: page.length,
+      total: filtered.length,
+      has_more: offset + limit < filtered.length,
+    },
+    {
+      headers: {
+        // Anonymous, location-keyed list. Quantizing lat/lng (~1km grid)
+        // on the client + this header lets the Vercel CDN collapse
+        // identical requests across users; revalidation in the background
+        // keeps the feed fresh without origin hits during cold-launch
+        // waves.
+        "Cache-Control":
+          "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    }
+  );
 }
 
 function haversine(

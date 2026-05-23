@@ -195,5 +195,11 @@ export async function GET(request: Request, { params }: Params) {
         : null,
       children,
     },
+  }, {
+    // The body carries per-user `progress` + per-stop `player_status`,
+    // so we can't share it across users. Private cache lets the iOS
+    // URLCache absorb the quest-preview re-opens that fire during
+    // navigation between Home and the map.
+    headers: { "Cache-Control": "private, max-age=20" },
   });
 }

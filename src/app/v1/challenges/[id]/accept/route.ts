@@ -18,20 +18,9 @@ export async function POST(request: Request, { params }: Params) {
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const { data: existing } = await client
-    .from("challenge_completions")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("challenge_id", id)
-    .is("completed_at", null)
-    .order("accepted_at", { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) {
-    return NextResponse.json({ data: existing });
-  }
-
+  // Resolve the parent travel-challenge so we can wire the new
+  // completion to the active progress session in one shot. Cheap single
+  // lookup; we always need it anyway for the insert payload.
   const { data: challengeRow } = await client
     .from("challenges")
     .select("id, travel_challenge_id")
@@ -48,7 +37,13 @@ export async function POST(request: Request, { params }: Params) {
     travelProgressId = progress.id as string;
   }
 
-  const { data, error: insertError } = await client
+  // Race-safe accept. The partial unique index
+  // `idx_completions_one_active_per_challenge` (migration 025) lets the
+  // DB collapse concurrent INSERTs from a flakey-network retry storm
+  // into a single row. ON CONFLICT DO NOTHING + a follow-up SELECT
+  // covers the case where another in-flight request already created
+  // the row (we'd lose the RETURNING value otherwise).
+  const { data: inserted, error: insertError } = await client
     .from("challenge_completions")
     .insert({
       user_id: user.id,
@@ -58,10 +53,38 @@ export async function POST(request: Request, { params }: Params) {
       travel_challenge_progress_id: travelProgressId,
     })
     .select("id")
-    .single();
+    .maybeSingle();
 
-  if (insertError)
-    return NextResponse.json({ error: insertError.message }, { status: 400 });
+  if (insertError) {
+    // 23505 = unique_violation. Another request landed first; fall back
+    // to reading the existing row so the client gets a consistent
+    // completion id either way.
+    const isUniqueViolation =
+      (insertError as { code?: string }).code === "23505";
+    if (!isUniqueViolation) {
+      return NextResponse.json({ error: insertError.message }, { status: 400 });
+    }
+  }
 
-  return NextResponse.json({ data });
+  if (inserted) {
+    return NextResponse.json({ data: inserted });
+  }
+
+  const { data: existing, error: existingError } = await client
+    .from("challenge_completions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("challenge_id", id)
+    .is("completed_at", null)
+    .order("accepted_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+  if (!existing) {
+    return NextResponse.json({ error: "accept_failed" }, { status: 500 });
+  }
+  return NextResponse.json({ data: existing });
 }
