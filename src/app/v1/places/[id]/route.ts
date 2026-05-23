@@ -51,7 +51,7 @@ export async function GET(request: Request, { params }: Params) {
                id, name, google_place_id
              )`,
           )
-          .eq("status", "published")
+          .eq("status", "live")
           .eq("business.google_place_id", place.google_place_id)
       : Promise.resolve({ data: [], error: null }),
     supabase
@@ -61,7 +61,7 @@ export async function GET(request: Request, { params }: Params) {
          latitude, longitude, status, travel_challenge_id,
          business:businesses (id, name, google_place_id)`,
       )
-      .eq("status", "published")
+      .eq("status", "live")
       .eq("place_id", place.id),
   ]);
 

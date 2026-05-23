@@ -572,14 +572,25 @@ export async function uploadTravelChallengeCover(formData: FormData) {
   if (!file.type.startsWith("image/"))
     return { error: "Only image files are allowed" };
 
-  const ext = file.name.split(".").pop() ?? "jpg";
+  // Filename includes a random UUID so each upload is a new cache key.
+  // We don't reuse a stable filename + upsert anymore because the CDN
+  // cache-control is now a year (immutable), and reusing the same URL
+  // for new bytes would serve the old image until eviction.
+  const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
   const path = `travel-challenges/${gate.user.id}/${randomUUID()}.${ext}`;
 
   const admin = createAdminClient();
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await admin.storage
     .from("public-assets")
-    .upload(path, buffer, { contentType: file.type, upsert: true });
+    .upload(path, buffer, {
+      contentType: file.type,
+      upsert: false,
+      // Cover art never changes for a given URL (we rotate the filename
+      // on replace), so let the CDN serve it for a year without
+      // revalidating. Drops origin egress to ~0 for cold-launch waves.
+      cacheControl: "31536000, immutable",
+    });
 
   if (error) return { error: error.message };
 

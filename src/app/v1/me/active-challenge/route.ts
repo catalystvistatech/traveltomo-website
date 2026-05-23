@@ -49,16 +49,19 @@ export async function GET(request: Request) {
     .limit(1)
     .maybeSingle();
 
+  // Private cache for both the empty and populated responses so the
+  // iOS URLCache short-circuits Home's per-appear refresh storms.
+  const cacheHeaders = { "Cache-Control": "private, max-age=15" };
+
   if (queryError) {
-    // PGRST116 = no rows; treat as "no active challenge" rather than 500.
     if (queryError.code === "PGRST116") {
-      return NextResponse.json({ data: null });
+      return NextResponse.json({ data: null }, { headers: cacheHeaders });
     }
     return NextResponse.json({ error: queryError.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ data: null });
+    return NextResponse.json({ data: null }, { headers: cacheHeaders });
   }
 
   type Row = {
@@ -97,7 +100,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: null });
   }
 
-  // Resolve the merchant's business ó used as the final coordinate
+  // Resolve the merchant's business ù used as the final coordinate
   // fallback when the challenge doesn't carry its own pin and the
   // linked place is null. Public read on `businesses` is allowed by
   // migration 014 (traveler_read_businesses).
@@ -148,5 +151,5 @@ export async function GET(request: Request) {
           }
         : null,
     },
-  });
+  }, { headers: cacheHeaders });
 }
