@@ -3,6 +3,10 @@
 **Last updated:** 2026-04-29
 **Audience:** Any developer working on TravelTomo (iOS, web, future Android).
 
+> **Product flow**: see [`docs/QUEST_FLOW.md`](./QUEST_FLOW.md) for the
+> canonical 10-step traveler experience (client-approved). Every quest
+> feature should map back to a step there with code references.
+
 ---
 
 ## 1. System Overview
