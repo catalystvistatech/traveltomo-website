@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /v1/me/active-challenge
  *
- * Returns the caller's most recent in-progress challenge ù a
+ * Returns the caller's most recent in-progress challenge ÔøΩ a
  * `challenge_completions` row that has been accepted (status `pending`)
  * but not yet verified (`completed_at IS NULL`). The response includes
  * enough info for the iOS app to render a "Continue Challenge" banner
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  // `challenges` has no direct FK to `businesses` ù only `merchant_id ->
+  // `challenges` has no direct FK to `businesses` ÔøΩ only `merchant_id ->
   // profiles.id`. We embed every relation PostgREST CAN discover, then
   // resolve the merchant's business in a second query below.
   const { data, error: queryError } = await client
@@ -100,7 +100,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: null });
   }
 
-  // Resolve the merchant's business ù used as the final coordinate
+  // Resolve the merchant's business ÔøΩ used as the final coordinate
   // fallback when the challenge doesn't carry its own pin and the
   // linked place is null. Public read on `businesses` is allowed by
   // migration 014 (traveler_read_businesses).

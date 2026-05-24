@@ -6,10 +6,16 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
 /**
- * `/v1/places/:id` - returns a single place row and any
- * challenges whose business has been linked to this place via its
- * `google_place_id`. If the id cannot be found as a Supabase UUID we
- * fall back to looking it up by `google_place_id` directly.
+ * `/v1/places/:id` - returns a single place row and any challenges whose
+ * business has been linked to this place via its `google_place_id`. If
+ * the id cannot be found as a Supabase UUID we fall back to looking it
+ * up by `google_place_id` directly.
+ *
+ * Note: `challenges` does not have a direct FK to `businesses` (its
+ * only owner reference is `merchant_id -> profiles.id`), so PostgREST
+ * cannot embed `business:businesses(...)` here. We resolve the linked
+ * business via `businesses.merchant_id` in a follow-up batched query
+ * and stitch the result into the response.
  */
 export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
@@ -36,36 +42,73 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Merchants can optionally pin a business to this Google place. Any
-  // published challenges belonging to such a business (or pinned
-  // directly to this place via `challenges.place_id`) are returned as
-  // the "tagged challenges" for the detail view.
-  const [byBusiness, byPlace] = await Promise.all([
-    place.google_place_id
-      ? supabase
-          .from("challenges")
-          .select(
-            `id, title, description, establishment_type, xp_reward,
-             latitude, longitude, status, travel_challenge_id,
-             business:businesses!inner (
-               id, name, google_place_id
-             )`,
-          )
-          .eq("status", "live")
-          .eq("business.google_place_id", place.google_place_id)
-      : Promise.resolve({ data: [], error: null }),
-    supabase
-      .from("challenges")
-      .select(
-        `id, title, description, establishment_type, xp_reward,
-         latitude, longitude, status, travel_challenge_id,
-         business:businesses (id, name, google_place_id)`,
-      )
-      .eq("status", "live")
-      .eq("place_id", place.id),
+  type ChallengeRow = {
+    id: string;
+    title: string;
+    description: string | null;
+    establishment_type: string | null;
+    xp_reward: number | null;
+    latitude: number | null;
+    longitude: number | null;
+    status: string;
+    travel_challenge_id: string | null;
+    merchant_id: string;
+  };
+
+  // 1. Challenges pinned directly to this place via `challenges.place_id`.
+  const byPlacePromise = supabase
+    .from("challenges")
+    .select(
+      `id, title, description, establishment_type, xp_reward,
+       latitude, longitude, status, travel_challenge_id, merchant_id`,
+    )
+    .eq("status", "live")
+    .eq("place_id", place.id);
+
+  // 2. Challenges whose merchant pinned a business to this Google place.
+  //    Look up the matching businesses first (single column hit, indexed),
+  //    then pull challenges for those merchants. Two indexed queries
+  //    replace the broken PostgREST embed.
+  type BusinessRow = {
+    id: string;
+    merchant_id: string;
+    name: string;
+    google_place_id: string | null;
+  };
+
+  let matchingBusinesses: BusinessRow[] = [];
+  if (place.google_place_id) {
+    const { data: bizRows, error: bizErr } = await supabase
+      .from("businesses")
+      .select("id, merchant_id, name, google_place_id")
+      .eq("google_place_id", place.google_place_id);
+    if (bizErr) {
+      return NextResponse.json({ error: bizErr.message }, { status: 500 });
+    }
+    matchingBusinesses = (bizRows ?? []) as BusinessRow[];
+  }
+
+  const merchantIds = Array.from(
+    new Set(matchingBusinesses.map((b) => b.merchant_id))
+  );
+
+  const byBusinessPromise = merchantIds.length > 0
+    ? supabase
+        .from("challenges")
+        .select(
+          `id, title, description, establishment_type, xp_reward,
+           latitude, longitude, status, travel_challenge_id, merchant_id`,
+        )
+        .eq("status", "live")
+        .in("merchant_id", merchantIds)
+    : Promise.resolve({ data: [] as ChallengeRow[], error: null });
+
+  const [byPlace, byBusiness] = await Promise.all([
+    byPlacePromise,
+    byBusinessPromise,
   ]);
 
-  const errors = [byBusiness.error, byPlace.error].filter(Boolean);
+  const errors = [byPlace.error, byBusiness.error].filter(Boolean);
   if (errors.length > 0) {
     return NextResponse.json(
       { error: errors.map((e) => e?.message).join(", ") },
@@ -73,9 +116,32 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  const byId = new Map<string, unknown>();
-  for (const row of byBusiness.data ?? []) byId.set(row.id as string, row);
-  for (const row of byPlace.data ?? []) byId.set(row.id as string, row);
+  const businessByMerchant = new Map<string, BusinessRow>(
+    matchingBusinesses.map((b) => [b.merchant_id, b])
+  );
+
+  function hydrate(row: ChallengeRow) {
+    const biz = businessByMerchant.get(row.merchant_id);
+    return {
+      ...row,
+      business: biz
+        ? {
+            id: biz.id,
+            name: biz.name,
+            google_place_id: biz.google_place_id,
+          }
+        : null,
+    };
+  }
+
+  const byId = new Map<string, ReturnType<typeof hydrate>>();
+  for (const row of (byBusiness.data ?? []) as ChallengeRow[]) {
+    byId.set(row.id, hydrate(row));
+  }
+  // Place-linked challenges win over merchant-linked ones if both apply.
+  for (const row of (byPlace.data ?? []) as ChallengeRow[]) {
+    byId.set(row.id, hydrate(row));
+  }
   const challenges = Array.from(byId.values());
 
   return NextResponse.json({
