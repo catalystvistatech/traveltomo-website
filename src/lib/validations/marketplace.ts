@@ -118,7 +118,30 @@ export const travelChallengeSchema = z.object({
     .enum(["percentage", "fixed", "freebie"])
     .optional(),
   big_reward_discount_value: z.coerce.number().min(0).optional(),
+  // New: where the big reward came from.
+  //   library  -> reuse an existing library reward row (id required)
+  //   custom   -> the title/description/type/value fields above hold
+  //               the new reward; optionally also persist a copy in
+  //               the merchant's library for future reuse.
+  big_reward_source: z.enum(["library", "custom"]).optional(),
+  big_reward_reward_id: z.string().uuid().optional().or(z.literal("")),
+  big_reward_save_to_library: z.coerce.boolean().optional(),
 });
+
+/**
+ * Standalone "library" reward — owned by a merchant, not tied to any
+ * single challenge. Used as a reusable pool the merchant can pick from
+ * when setting the big reward on a travel challenge.
+ */
+export const libraryRewardSchema = z.object({
+  title: z.string().min(3, "Title needs at least 3 characters").max(100, "Title is too long"),
+  description: z.string().max(300, "Description is too long").optional().or(z.literal("")),
+  discount_type: z.enum(["percentage", "fixed", "freebie"]).default("freebie"),
+  discount_value: z.coerce.number().min(0, "Value cannot be negative").optional(),
+  max_redemptions: z.coerce.number().int().positive().optional(),
+  expires_at: z.string().optional().or(z.literal("")),
+});
+export type LibraryRewardInput = z.infer<typeof libraryRewardSchema>;
 
 export const childChallengeSchema = z.object({
   title: z.string().min(3, "Title needs at least 3 characters").max(120, "Title is too long"),
