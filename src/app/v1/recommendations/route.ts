@@ -32,6 +32,26 @@ export async function GET(request: Request) {
   const supabase = createApiClient(request);
   const auth = await requireUser(request);
 
+  // Persist the caller's last-known location for the
+  // `challenge_unlocked` notification trigger (migration 028). This
+  // route is hit on every Home appear so it's the cheapest place to
+  // refresh the location without adding a dedicated endpoint. Failures
+  // are swallowed - we never want a location persist error to take
+  // down recommendations.
+  if (auth.user) {
+    void auth.client
+      .rpc("touch_user_location", {
+        p_user: auth.user.id,
+        p_lat: lat,
+        p_lng: lng,
+      })
+      .then((res) => {
+        if (res.error) {
+          console.warn("touch_user_location failed", res.error.message);
+        }
+      });
+  }
+
   let query = supabase
     .from("recommended_challenges")
     .select("*")
