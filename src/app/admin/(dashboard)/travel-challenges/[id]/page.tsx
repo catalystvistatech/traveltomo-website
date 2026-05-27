@@ -372,7 +372,7 @@ export default function TravelChallengeDetailPage({
     const r = await submitTravelChallengeForReview(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Travel challenge is now live!");
+      toast.success("Quest is now live!");
       await reload();
     }
   }
@@ -410,7 +410,7 @@ export default function TravelChallengeDetailPage({
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Travel challenge updated");
+    toast.success("Quest updated");
     setShowEdit(false);
     await reload();
   }
@@ -419,7 +419,7 @@ export default function TravelChallengeDetailPage({
     if (!confirm(`Delete "${(tc as Record<string, unknown>).title}"? All stops will also be deleted. This cannot be undone.`)) return;
     const r = await deleteTravelChallenge(id);
     if ("error" in r) { toast.error(r.error as string); return; }
-    toast.success("Travel challenge deleted");
+    toast.success("Quest deleted");
     router.push("/admin/travel-challenges");
   }
 
@@ -564,7 +564,7 @@ export default function TravelChallengeDetailPage({
       {showEdit && (
         <Card className="bg-zinc-900 border-zinc-700">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-white text-base">Edit Travel Challenge</CardTitle>
+            <CardTitle className="text-white text-base">Edit Quest</CardTitle>
             <button type="button" onClick={() => setShowEdit(false)} className="text-zinc-500 hover:text-white">
               <X className="h-4 w-4" />
             </button>

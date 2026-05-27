@@ -17,7 +17,7 @@ import type { UserProfile } from "@/lib/actions/auth";
 const merchantNav = [
   { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { title: "Business Profile", href: "/admin/business", icon: Store },
-  { title: "Travel Challenges", href: "/admin/travel-challenges", icon: Trophy },
+  { title: "Quests", href: "/admin/travel-challenges", icon: Trophy },
   { title: "Template Library", href: "/admin/template-library", icon: FileStack },
   { title: "Verify Completions", href: "/admin/completions", icon: CheckCircle2 },
   { title: "Claim History", href: "/admin/claims", icon: History },
@@ -30,7 +30,7 @@ const merchantNav = [
 const adminNav = [
   { title: "Users", href: "/admin/manage/users", icon: Users },
   { title: "Business Verification", href: "/admin/manage/businesses", icon: Shield },
-  { title: "Travel Challenge Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
+  { title: "Quest Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
   { title: "Challenge Approvals", href: "/admin/manage/challenges", icon: ListChecks },
   { title: "Templates", href: "/admin/templates", icon: FileStack },
   { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
