@@ -11,6 +11,7 @@ import {
   lookupCachedPlaces,
   mirrorPlaces,
 } from "@/lib/google/placesCache";
+import { annotateHasLiveChallenges } from "@/lib/places-challenge-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -93,8 +94,10 @@ export async function GET(request: Request) {
       if (cached.length > 0) {
         const sorted: NormalizedPlace[] =
           mode === "trending" ? sortByTrending(cached) : sortByDistance(cached, lat, lng);
-        const page = sorted.slice(offset, offset + limit);
+        const rawPage = sorted.slice(offset, offset + limit);
         const hasMore = offset + limit < sorted.length;
+        const cacheClient = await createClient();
+        const page = await annotateHasLiveChallenges(cacheClient, rawPage);
 
         return NextResponse.json(
           {
@@ -143,8 +146,10 @@ export async function GET(request: Request) {
           ? sortByTrending(mirrored)
           : sortByDistance(mirrored, lat, lng);
 
-      const page = sorted.slice(offset, offset + limit);
+      const rawPage = sorted.slice(offset, offset + limit);
       const hasMore = offset + limit < sorted.length;
+      const liveClient = await createClient();
+      const page = await annotateHasLiveChallenges(liveClient, rawPage);
 
       return NextResponse.json(
         {
@@ -196,9 +201,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const dbPage = await annotateHasLiveChallenges(supabase, data ?? []);
+
   return NextResponse.json({
-    data: data ?? [],
-    count: data?.length ?? 0,
+    data: dbPage,
+    count: dbPage.length,
     source: "db",
     ...(googleError ? { google_error: googleError } : {}),
   });
