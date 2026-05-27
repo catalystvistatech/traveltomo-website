@@ -33,23 +33,36 @@ export async function GET(request: Request) {
   const auth = await requireUser(request);
 
   // Persist the caller's last-known location for the
-  // `challenge_unlocked` notification trigger (migration 028). This
-  // route is hit on every Home appear so it's the cheapest place to
-  // refresh the location without adding a dedicated endpoint. Failures
-  // are swallowed - we never want a location persist error to take
-  // down recommendations.
+  // `challenge_unlocked` notification trigger (migration 028) and run
+  // the unseen-quest backfill sweep (migration 029) so the user picks
+  // up notifications for travel challenges that went live BEFORE the
+  // trigger existed. Failures are swallowed - we never want a
+  // location persist or notification fan-out hiccup to take down the
+  // recommendations response.
   if (auth.user) {
-    void auth.client
-      .rpc("touch_user_location", {
-        p_user: auth.user.id,
+    const userId = auth.user.id;
+    const client = auth.client;
+    void (async () => {
+      const { error: touchError } = await client.rpc("touch_user_location", {
+        p_user: userId,
         p_lat: lat,
         p_lng: lng,
-      })
-      .then((res) => {
-        if (res.error) {
-          console.warn("touch_user_location failed", res.error.message);
-        }
       });
+      if (touchError) {
+        console.warn("touch_user_location failed", touchError.message);
+        return;
+      }
+      const { error: sweepError } = await client.rpc(
+        "notify_user_of_unseen_nearby_quests",
+        { p_user: userId, p_lat: lat, p_lng: lng }
+      );
+      if (sweepError) {
+        console.warn(
+          "notify_user_of_unseen_nearby_quests failed",
+          sweepError.message
+        );
+      }
+    })();
   }
 
   let query = supabase
