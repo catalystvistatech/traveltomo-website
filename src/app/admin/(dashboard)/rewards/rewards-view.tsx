@@ -87,7 +87,7 @@ export function RewardsView({ initialLibrary, initialLinked }: Props) {
           <h1 className="text-2xl font-bold text-white">Rewards</h1>
           <p className="text-zinc-400 mt-1">
             Your reusable reward library. Pick from these when setting the
-            big reward on a travel challenge.
+            big reward on a quest.
           </p>
         </div>
         <Button
@@ -225,7 +225,7 @@ export function RewardsView({ initialLibrary, initialLinked }: Props) {
             <h3 className="text-lg font-medium text-white">No rewards yet</h3>
             <p className="text-zinc-400 mt-1 text-center">
               Tap <span className="text-white">New Reward</span> to add one,
-              or create a travel challenge - your rewards there land here
+              or create a quest - your rewards there land here
               too.
             </p>
           </CardContent>
@@ -235,7 +235,7 @@ export function RewardsView({ initialLibrary, initialLinked }: Props) {
           {library.length > 0 && (
             <RewardSection
               title="Library"
-              subtitle="Reusable - pick when creating a travel challenge."
+              subtitle="Reusable - pick when creating a quest."
               rewards={library}
               onDelete={handleDelete}
             />
