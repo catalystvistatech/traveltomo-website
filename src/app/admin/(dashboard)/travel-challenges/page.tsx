@@ -8,6 +8,7 @@ import {
   deleteTravelChallenge,
   uploadTravelChallengeCover,
   listMerchantBusinesses,
+  listMerchantLibraryRewards,
 } from "@/lib/actions/travelChallenges";
 import {
   Card,
@@ -43,9 +44,18 @@ const STATUS_CLASS: Record<string, string> = {
   rejected: "border-red-600 text-red-400",
 };
 
+type LibraryReward = {
+  id: string;
+  title: string;
+  description: string | null;
+  discount_type: "percentage" | "fixed" | "freebie";
+  discount_value: number | null;
+};
+
 export default function TravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [businesses, setBusinesses] = useState<{ id: string; name: string; verification_status: string }[]>([]);
+  const [libraryRewards, setLibraryRewards] = useState<LibraryReward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,6 +70,9 @@ export default function TravelChallengesPage() {
     date_range_start: "",
     date_range_end: "",
     max_total_completions: "",
+    big_reward_source: "custom" as "library" | "custom",
+    big_reward_reward_id: "",
+    big_reward_save_to_library: false,
     big_reward_title: "",
     big_reward_description: "",
     big_reward_discount_type: "" as "" | "percentage" | "fixed" | "freebie",
@@ -68,10 +81,14 @@ export default function TravelChallengesPage() {
 
   async function reload() {
     setIsLoading(true);
-    const [tcRows, bizList] = await Promise.all([listTravelChallenges(), listMerchantBusinesses()]);
+    const [tcRows, bizList, rewards] = await Promise.all([
+      listTravelChallenges(),
+      listMerchantBusinesses(),
+      listMerchantLibraryRewards(),
+    ]);
     setRows(tcRows);
     setBusinesses(bizList);
-    // Pre-select the first approved business
+    setLibraryRewards(rewards);
     if (!form.business_id) {
       const approved = bizList.find((b) => b.verification_status === "approved");
       if (approved) setForm((f) => ({ ...f, business_id: approved.id }));
@@ -110,6 +127,10 @@ export default function TravelChallengesPage() {
 
   async function handleCreate() {
     setSaving(true);
+    // When the merchant picked a library reward we only need to send
+    // the id + source; the server copies the title/description/discount
+    // out of the reward row itself. The inline fields are sent anyway
+    // as a no-op fallback so the form stays simple.
     const payload = {
       ...form,
       max_total_completions: form.max_total_completions
@@ -119,6 +140,7 @@ export default function TravelChallengesPage() {
         ? parseFloat(form.big_reward_discount_value)
         : undefined,
       big_reward_discount_type: form.big_reward_discount_type || undefined,
+      big_reward_reward_id: form.big_reward_reward_id || undefined,
     };
     const r = await createTravelChallenge(payload);
     setSaving(false);
@@ -313,67 +335,162 @@ export default function TravelChallengesPage() {
               <h3 className="text-sm font-semibold text-white">
                 Big Reward (if completion mode = All)
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Big reward title</Label>
-                  <Input
-                    value={form.big_reward_title}
-                    onChange={(e) =>
-                      setForm({ ...form, big_reward_title: e.target.value })
-                    }
-                    className="bg-zinc-800 border-zinc-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Type</Label>
-                  <Select
-                    value={form.big_reward_discount_type || undefined}
-                    onValueChange={(v: string | null) =>
-                      setForm({
-                        ...form,
-                        big_reward_discount_type: (v ?? "") as typeof form.big_reward_discount_type,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                      <SelectValue placeholder="(none)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">% discount</SelectItem>
-                      <SelectItem value="fixed">Fixed amount</SelectItem>
-                      <SelectItem value="freebie">Freebie</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
+              <div className="inline-flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5 text-xs">
+                {(["library", "custom"] as const).map((mode) => {
+                  const active = form.big_reward_source === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() =>
+                        setForm({ ...form, big_reward_source: mode })
+                      }
+                      className={`px-3 py-1.5 rounded-md transition-colors ${
+                        active
+                          ? "bg-zinc-700 text-white"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {mode === "library"
+                        ? `Pick from library (${libraryRewards.length})`
+                        : "Custom"}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Big reward description</Label>
-                <Textarea
-                  rows={2}
-                  value={form.big_reward_description}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      big_reward_description: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Big reward value</Label>
-                <Input
-                  type="number"
-                  value={form.big_reward_discount_value}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      big_reward_discount_value: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
+
+              {form.big_reward_source === "library" ? (
+                libraryRewards.length === 0 ? (
+                  <p className="text-xs text-zinc-500">
+                    Your reward library is empty. Add one from the{" "}
+                    <a
+                      href="/admin/rewards"
+                      className="text-red-400 hover:text-red-300 underline"
+                    >
+                      Rewards page
+                    </a>{" "}
+                    or switch to Custom to create one now.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Reward</Label>
+                    <Select
+                      value={form.big_reward_reward_id || undefined}
+                      onValueChange={(v: string | null) => {
+                        if (!v) return;
+                        const picked = libraryRewards.find((r) => r.id === v);
+                        setForm({
+                          ...form,
+                          big_reward_reward_id: v,
+                          big_reward_title: picked?.title ?? "",
+                          big_reward_description: picked?.description ?? "",
+                          big_reward_discount_type:
+                            (picked?.discount_type ?? "") as typeof form.big_reward_discount_type,
+                          big_reward_discount_value:
+                            picked?.discount_value?.toString() ?? "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                        <SelectValue placeholder="Pick a reward" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {libraryRewards.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.title}{" "}
+                            {r.discount_type === "freebie"
+                              ? "(freebie)"
+                              : r.discount_value != null
+                                ? `(${r.discount_value}${
+                                    r.discount_type === "percentage" ? "%" : ""
+                                  })`
+                                : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Big reward title</Label>
+                      <Input
+                        value={form.big_reward_title}
+                        onChange={(e) =>
+                          setForm({ ...form, big_reward_title: e.target.value })
+                        }
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Type</Label>
+                      <Select
+                        value={form.big_reward_discount_type || undefined}
+                        onValueChange={(v: string | null) =>
+                          setForm({
+                            ...form,
+                            big_reward_discount_type: (v ?? "") as typeof form.big_reward_discount_type,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                          <SelectValue placeholder="(none)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">% discount</SelectItem>
+                          <SelectItem value="fixed">Fixed amount</SelectItem>
+                          <SelectItem value="freebie">Freebie</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward description</Label>
+                    <Textarea
+                      rows={2}
+                      value={form.big_reward_description}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_description: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward value</Label>
+                    <Input
+                      type="number"
+                      value={form.big_reward_discount_value}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_discount_value: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={form.big_reward_save_to_library}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_save_to_library: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-red-600 focus:ring-red-600"
+                    />
+                    Also save this reward to my Rewards library for reuse
+                  </label>
+                </>
+              )}
             </div>
             <div className="flex gap-2 pt-3">
               <Button

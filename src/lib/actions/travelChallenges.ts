@@ -80,6 +80,31 @@ function distanceMeters(
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+/**
+ * Returns the calling merchant's library rewards (`challenge_id IS NULL`)
+ * so the travel-challenge form can offer a "pick from library" dropdown
+ * for the BIG REWARD slot.
+ */
+export async function listMerchantLibraryRewards() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("rewards")
+    .select("id, title, description, discount_type, discount_value")
+    .eq("merchant_id", user.id)
+    .is("challenge_id", null)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as {
+    id: string;
+    title: string;
+    description: string | null;
+    discount_type: "percentage" | "fixed" | "freebie";
+    discount_value: number | null;
+  }[];
+}
+
 export async function listMerchantBusinesses() {
   const user = await getCurrentUser();
   if (!user) return [];
@@ -159,6 +184,20 @@ export async function createTravelChallenge(input: unknown) {
   }
 
   const supabase = await createClient();
+
+  const bigReward = await resolveBigReward({
+    supabase,
+    merchantId: gate.user.id,
+    source: parsed.data.big_reward_source,
+    libraryRewardId: parsed.data.big_reward_reward_id || null,
+    title: parsed.data.big_reward_title || null,
+    description: parsed.data.big_reward_description || null,
+    discountType: parsed.data.big_reward_discount_type ?? null,
+    discountValue: parsed.data.big_reward_discount_value ?? null,
+    saveToLibrary: !!parsed.data.big_reward_save_to_library,
+  });
+  if ("error" in bigReward) return { error: { _form: [bigReward.error] } };
+
   const { data, error } = await supabase
     .from("travel_challenges")
     .insert({
@@ -171,10 +210,10 @@ export async function createTravelChallenge(input: unknown) {
       date_range_start: parsed.data.date_range_start || null,
       date_range_end: parsed.data.date_range_end || null,
       max_total_completions: parsed.data.max_total_completions ?? null,
-      big_reward_title: parsed.data.big_reward_title || null,
-      big_reward_description: parsed.data.big_reward_description || null,
-      big_reward_discount_type: parsed.data.big_reward_discount_type ?? null,
-      big_reward_discount_value: parsed.data.big_reward_discount_value ?? null,
+      big_reward_title: bigReward.title,
+      big_reward_description: bigReward.description,
+      big_reward_discount_type: bigReward.discountType,
+      big_reward_discount_value: bigReward.discountValue,
       status: "draft",
     })
     .select("id")
@@ -185,6 +224,78 @@ export async function createTravelChallenge(input: unknown) {
   return { success: true, id: data.id };
 }
 
+/**
+ * Normalises the big-reward portion of a travel challenge form into
+ * the four denormalised columns we already store on `travel_challenges`
+ * (title / description / discount_type / discount_value).
+ *
+ *   - source = "library": copy fields from the picked library reward.
+ *     The library row itself is not modified -- the merchant can reuse
+ *     it on another travel challenge or edit it independently.
+ *   - source = "custom" (or unspecified): use the inline form fields.
+ *     If saveToLibrary is true, also insert a row into `rewards` with
+ *     `challenge_id = NULL` so the merchant can reuse this reward
+ *     later from the picker.
+ */
+async function resolveBigReward(args: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any;
+  merchantId: string;
+  source: "library" | "custom" | undefined;
+  libraryRewardId: string | null;
+  title: string | null;
+  description: string | null;
+  discountType: "percentage" | "fixed" | "freebie" | null;
+  discountValue: number | null;
+  saveToLibrary: boolean;
+}): Promise<
+  | {
+      title: string | null;
+      description: string | null;
+      discountType: "percentage" | "fixed" | "freebie" | null;
+      discountValue: number | null;
+    }
+  | { error: string }
+> {
+  if (args.source === "library" && args.libraryRewardId) {
+    const { data: reward } = await args.supabase
+      .from("rewards")
+      .select("id, merchant_id, title, description, discount_type, discount_value")
+      .eq("id", args.libraryRewardId)
+      .maybeSingle();
+    if (!reward || reward.merchant_id !== args.merchantId) {
+      return { error: "The selected library reward doesn't belong to you." };
+    }
+    return {
+      title: reward.title,
+      description: reward.description,
+      discountType: reward.discount_type,
+      discountValue: reward.discount_value,
+    };
+  }
+
+  // Custom reward path. Optionally persist a library copy.
+  if (args.saveToLibrary && args.title) {
+    const { error } = await args.supabase.from("rewards").insert({
+      merchant_id: args.merchantId,
+      challenge_id: null,
+      title: args.title,
+      description: args.description,
+      discount_type: args.discountType ?? "freebie",
+      discount_value: args.discountValue,
+      is_active: true,
+    });
+    if (error) return { error: error.message };
+  }
+
+  return {
+    title: args.title,
+    description: args.description,
+    discountType: args.discountType,
+    discountValue: args.discountValue,
+  };
+}
+
 export async function updateTravelChallenge(id: string, input: unknown) {
   const parsed = travelChallengeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
@@ -193,6 +304,20 @@ export async function updateTravelChallenge(id: string, input: unknown) {
   if ("error" in gate) return { error: { _form: [gate.error] } };
 
   const supabase = await createClient();
+
+  const bigReward = await resolveBigReward({
+    supabase,
+    merchantId: gate.user.id,
+    source: parsed.data.big_reward_source,
+    libraryRewardId: parsed.data.big_reward_reward_id || null,
+    title: parsed.data.big_reward_title || null,
+    description: parsed.data.big_reward_description || null,
+    discountType: parsed.data.big_reward_discount_type ?? null,
+    discountValue: parsed.data.big_reward_discount_value ?? null,
+    saveToLibrary: !!parsed.data.big_reward_save_to_library,
+  });
+  if ("error" in bigReward) return { error: { _form: [bigReward.error] } };
+
   const updatePayload: Record<string, unknown> = {
     title: parsed.data.title,
     description: parsed.data.description || null,
@@ -201,10 +326,10 @@ export async function updateTravelChallenge(id: string, input: unknown) {
     date_range_start: parsed.data.date_range_start || null,
     date_range_end: parsed.data.date_range_end || null,
     max_total_completions: parsed.data.max_total_completions ?? null,
-    big_reward_title: parsed.data.big_reward_title || null,
-    big_reward_description: parsed.data.big_reward_description || null,
-    big_reward_discount_type: parsed.data.big_reward_discount_type ?? null,
-    big_reward_discount_value: parsed.data.big_reward_discount_value ?? null,
+    big_reward_title: bigReward.title,
+    big_reward_description: bigReward.description,
+    big_reward_discount_type: bigReward.discountType,
+    big_reward_discount_value: bigReward.discountValue,
   };
   if (parsed.data.business_id) {
     updatePayload.business_id = parsed.data.business_id;
