@@ -96,7 +96,7 @@ export default async function DashboardPage() {
             accent={adminOverview.businessesPending > 0 ? "text-yellow-300" : undefined}
           />
           <StatCard
-            title="Pending Travel Challenges"
+            title="Pending Quests"
             value={adminOverview.travelChallengesPending}
             icon={<ShieldCheck className="h-4 w-4 text-yellow-400" />}
             href="/admin/manage/travel-challenges"
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
       {summary && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            title="Live Travel Challenges"
+            title="Live Quests"
             value={summary.live}
             icon={<Eye className="h-4 w-4 text-green-400" />}
             accent="text-green-400"
@@ -151,7 +151,7 @@ export default async function DashboardPage() {
         <CardContent className="flex flex-wrap gap-3">
           <Link href="/admin/travel-challenges">
             <Button className="bg-red-600 hover:bg-red-700">
-              Manage Travel Challenges
+              Manage Quests
             </Button>
           </Link>
           <Link href="/admin/business">
@@ -238,7 +238,7 @@ function RecommendationStatusCard({
     },
     {
       ok: status.liveTravelChallenges > 0,
-      label: `${status.liveTravelChallenges} live travel challenge(s)`,
+      label: `${status.liveTravelChallenges} live quest(s)`,
       href: "/admin/travel-challenges",
     },
   ];

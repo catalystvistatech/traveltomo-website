@@ -100,7 +100,7 @@ export async function getRecommendationStatus(): Promise<RecommendationStatus> {
   if (!hasHours) blockers.push("Operating hours not configured");
   if (!isOpenNow) blockers.push("Currently outside your operating hours");
   if (!hasActivePromotion) blockers.push("No active promotion subscription");
-  if (liveTravelChallenges === 0) blockers.push("No live travel challenges yet");
+  if (liveTravelChallenges === 0) blockers.push("No live quests yet");
 
   const isRecommendable =
     businessVerified && hasLocation && hasHours && isOpenNow && hasActivePromotion && liveTravelChallenges > 0;

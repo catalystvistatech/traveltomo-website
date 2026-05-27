@@ -38,7 +38,7 @@ function isSuperadmin(role: string | undefined | null): boolean {
 function travelChallengePublishStopError(stopCount: number): string | null {
   if (stopCount >= TRAVEL_CHALLENGE_STOP_COUNT) return null;
   const remaining = TRAVEL_CHALLENGE_STOP_COUNT - stopCount;
-  return `Travel challenges need ${TRAVEL_CHALLENGE_STOP_COUNT} stops before publishing (matches the dice roll board). Add ${remaining} more stop${remaining === 1 ? "" : "s"}.`;
+  return `Quests need ${TRAVEL_CHALLENGE_STOP_COUNT} stops before publishing (matches the dice roll board). Add ${remaining} more stop${remaining === 1 ? "" : "s"}.`;
 }
 
 async function getApprovedBusiness(userId: string) {
@@ -175,10 +175,10 @@ export async function createTravelChallenge(input: unknown) {
   } else {
     const fallback = await getApprovedBusiness(gate.user.id);
     if (!fallback) {
-      return { error: { _form: ["Create a business first before adding travel challenges."] } };
+      return { error: { _form: ["Create a business first before adding quests."] } };
     }
     if (!bypass && fallback.verification_status !== "approved") {
-      return { error: { _form: ["Your business must be verified by an admin before creating travel challenges."] } };
+      return { error: { _form: ["Your business must be verified by an admin before creating quests."] } };
     }
     selectedBizId = fallback.id;
   }
@@ -450,9 +450,9 @@ export async function addChildChallenge(
     .select("id, merchant_id, business_id")
     .eq("id", travelChallengeId)
     .single();
-  if (!parent) return { error: { _form: ["Travel challenge not found"] } };
+  if (!parent) return { error: { _form: ["Quest not found"] } };
   if (parent.merchant_id !== gate.user.id && gate.user.role === "merchant") {
-    return { error: { _form: ["You don't own this travel challenge"] } };
+    return { error: { _form: ["You don't own this quest"] } };
   }
 
   const { count } = await supabase
@@ -463,7 +463,7 @@ export async function addChildChallenge(
     return {
       error: {
         _form: [
-          `Maximum ${TRAVEL_CHALLENGE_STOP_COUNT} stops per travel challenge.`,
+          `Maximum ${TRAVEL_CHALLENGE_STOP_COUNT} stops per quest.`,
         ],
       },
     };

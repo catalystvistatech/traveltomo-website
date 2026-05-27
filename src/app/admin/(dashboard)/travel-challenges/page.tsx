@@ -148,7 +148,7 @@ export default function TravelChallengesPage() {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Travel challenge created");
+    toast.success("Quest created");
     setShowNew(false);
     await reload();
   }
@@ -158,7 +158,7 @@ export default function TravelChallengesPage() {
     const r = await deleteTravelChallenge(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Travel challenge deleted");
+      toast.success("Quest deleted");
       await reload();
     }
   }
@@ -167,7 +167,7 @@ export default function TravelChallengesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Travel Challenges</h1>
+          <h1 className="text-2xl font-bold text-white">Quests</h1>
           <p className="text-zinc-400 mt-1">
             Bundle multiple challenges into a set. Complete any or all; merchants
             set the big-reward bonus.
@@ -177,14 +177,14 @@ export default function TravelChallengesPage() {
           onClick={() => setShowNew((v) => !v)}
           className="bg-red-600 hover:bg-red-700 text-white gap-2"
         >
-          <Plus className="h-4 w-4" /> New Travel Challenge
+          <Plus className="h-4 w-4" /> New Quest
         </Button>
       </div>
 
       {showNew && (
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-white">New Travel Challenge</CardTitle>
+            <CardTitle className="text-white">New Quest</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -558,7 +558,7 @@ export default function TravelChallengesPage() {
                   handleDelete(rec.id as string, rec.title as string);
                 }}
                 className="absolute top-3 right-3 p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
-                title="Delete travel challenge"
+                title="Delete quest"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -567,7 +567,7 @@ export default function TravelChallengesPage() {
         })}
         {rows.length === 0 && (
           <p className="text-zinc-500 text-sm">
-            No travel challenges yet. Create your first one above.
+            No quests yet. Create your first one above.
           </p>
         )}
       </div>

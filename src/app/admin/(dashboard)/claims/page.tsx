@@ -336,9 +336,9 @@ export default function ClaimsPage() {
         <EmptyState
           icon={<Sparkles className="h-6 w-6 text-zinc-500" />}
           title="No challenges yet"
-          description="Create a travel challenge to start collecting completions from travelers."
+          description="Create a quest to start collecting completions from travelers."
           ctaHref="/admin/travel-challenges"
-          ctaLabel="Create a Travel Challenge"
+          ctaLabel="Create a Quest"
         />
       ) : filteredRows.length === 0 ? (
         <EmptyState
