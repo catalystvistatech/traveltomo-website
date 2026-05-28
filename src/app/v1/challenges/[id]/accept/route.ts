@@ -29,10 +29,39 @@ export async function POST(request: Request, { params }: Params) {
 
   let travelProgressId: string | null = null;
   if (challengeRow?.travel_challenge_id) {
+    const travelChallengeId = challengeRow.travel_challenge_id as string;
+
+    // Lock-in: a player may only have ONE in-flight stop per quest at a
+    // time. The partial unique index only guards one row per
+    // (user, challenge), so without this check a player could roll +
+    // accept several different stops of the same quest and pile up
+    // multiple `ongoing` rows. Reject the accept unless the only
+    // in-flight stop is THIS one (idempotent re-tap).
+    const { data: siblingInFlight } = await client
+      .from("challenge_completions")
+      .select("id, challenge_id, challenges!inner(travel_challenge_id)")
+      .eq("user_id", user.id)
+      .is("completed_at", null)
+      .eq("challenges.travel_challenge_id", travelChallengeId)
+      .neq("challenge_id", id)
+      .limit(1)
+      .maybeSingle();
+
+    if (siblingInFlight) {
+      return NextResponse.json(
+        {
+          error: "stop_in_progress",
+          detail:
+            "You already have a stop in progress for this quest. Finish or skip it before starting another.",
+        },
+        { status: 409 }
+      );
+    }
+
     const progress = await ensureTravelChallengeProgress(
       client,
       user.id,
-      challengeRow.travel_challenge_id as string
+      travelChallengeId
     );
     travelProgressId = progress.id as string;
   }
