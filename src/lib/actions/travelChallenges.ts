@@ -447,13 +447,22 @@ export async function addChildChallenge(
   const supabase = await createClient();
   const { data: parent } = await supabase
     .from("travel_challenges")
-    .select("id, merchant_id, business_id")
+    .select("id, merchant_id, business_id, status")
     .eq("id", travelChallengeId)
     .single();
   if (!parent) return { error: { _form: ["Quest not found"] } };
   if (parent.merchant_id !== gate.user.id && gate.user.role === "merchant") {
     return { error: { _form: ["You don't own this quest"] } };
   }
+
+  // When the parent quest is already published, stops added afterward
+  // must inherit `live` status. Otherwise they stay `draft` forever
+  // (the publish flow only runs from draft/rejected) and the iOS app
+  // never counts them - the "0 / 2 stops" bug where a 6-stop quest
+  // only shows the 2 stops that existed at publish time.
+  const parentLive =
+    (parent as { status?: string }).status === "live" ||
+    (parent as { status?: string }).status === "approved";
 
   const { count } = await supabase
     .from("challenges")
@@ -526,7 +535,8 @@ export async function addChildChallenge(
         : null,
       quiz_answer: parsed.data.quiz_answer || null,
       qr_code_value: challengeQR,
-      status: "draft",
+      status: parentLive ? "live" : "draft",
+      approved_at: parentLive ? new Date().toISOString() : null,
     })
     .select("id")
     .single();
