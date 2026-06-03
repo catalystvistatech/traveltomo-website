@@ -80,6 +80,12 @@ export default function UsersPage() {
       setIsLoading(true);
       try {
         const result = await listUsers({ search: s, role: r, page: p, pageSize: PAGE_SIZE });
+        if (result.error) {
+          toast.error(result.error);
+          setUsers([]);
+          setTotal(0);
+          return;
+        }
         setUsers(result.users);
         setTotal(result.total);
       } catch (e) {

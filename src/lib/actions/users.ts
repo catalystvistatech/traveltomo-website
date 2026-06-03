@@ -38,8 +38,13 @@ export async function listUsers({
   role?: string;
   page?: number;
   pageSize?: number;
-} = {}): Promise<{ users: ManagedUser[]; total: number }> {
-  await requireAdmin();
+} = {}): Promise<{ users: ManagedUser[]; total: number; error?: string }> {
+  try {
+    await requireAdmin();
+  } catch {
+    return { users: [], total: 0, error: "Unauthorized" };
+  }
+
   const admin = createAdminClient();
 
   let query = admin
@@ -62,7 +67,10 @@ export async function listUsers({
   }
 
   const { data, count, error } = await query;
-  if (error) throw new Error(error.message);
+  // Return the real error instead of throwing: a thrown server-action error
+  // is masked in production as a generic "Server Components render" message,
+  // which hides the actual cause (e.g. a stale PostgREST schema cache).
+  if (error) return { users: [], total: 0, error: error.message };
 
   return { users: (data ?? []) as ManagedUser[], total: count ?? 0 };
 }
