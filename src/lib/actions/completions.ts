@@ -14,7 +14,7 @@ export async function listPendingCompletions() {
   const query = supabase
     .from("challenge_completions")
     .select(
-      "id, user_id, challenge_id, verification_status, verification_code, completed_at, gps_latitude, gps_longitude, proof_url, challenges!inner(id, title, merchant_id, rewards(id, title, discount_type, discount_value))"
+      "id, user_id, challenge_id, verification_status, verification_code, completed_at, gps_latitude, gps_longitude, proof_url, user:profiles!challenge_completions_user_id_fkey(id, display_name, avatar_url), challenges!inner(id, title, merchant_id, rewards(id, title, discount_type, discount_value))"
     )
     .order("completed_at", { ascending: false });
 

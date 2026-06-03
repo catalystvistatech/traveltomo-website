@@ -27,10 +27,64 @@ const STATUS_CLASS: Record<string, string> = {
   rejected: "border-red-600 text-red-400",
 };
 
+const PAGE_SIZE = 8;
+
+/** Pull the traveler's display name off an embedded profile, if present. */
+function travelerName(rec: Record<string, unknown>): string {
+  const u = rec.user as { display_name?: string | null } | null;
+  const name = u?.display_name?.trim();
+  return name && name.length > 0 ? name : "Unknown traveler";
+}
+
+function Paginator({
+  page,
+  pageCount,
+  total,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  onPage: (p: number) => void;
+}) {
+  if (pageCount <= 1) return null;
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, from + PAGE_SIZE - 1);
+  return (
+    <div className="flex items-center justify-between mt-3 text-xs text-zinc-500">
+      <span>
+        {from}-{to} of {total}
+      </span>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page <= 0}
+          onClick={() => onPage(page - 1)}
+          className="h-7 border-zinc-700 text-zinc-300 disabled:opacity-40"
+        >
+          Prev
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page >= pageCount - 1}
+          onClick={() => onPage(page + 1)}
+          className="h-7 border-zinc-700 text-zinc-300 disabled:opacity-40"
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function CompletionsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [codeInput, setCodeInput] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [pendingPage, setPendingPage] = useState(0);
+  const [reviewedPage, setReviewedPage] = useState(0);
   const [pending, startTransition] = useTransition();
 
   async function reload() {
@@ -69,11 +123,21 @@ export default function CompletionsPage() {
     });
   }
 
-  const matches = codeInput
+  const query = searchInput.trim().toLowerCase();
+  const matches = query
     ? rows.filter((r) => {
         const rec = r as Record<string, unknown>;
-        const code = rec.verification_code as string | null;
-        return code?.toLowerCase().includes(codeInput.toLowerCase());
+        const code = (rec.verification_code as string | null)?.toLowerCase() ?? "";
+        const name = travelerName(rec).toLowerCase();
+        const title =
+          ((rec.challenges as Record<string, unknown> | null)?.title as
+            | string
+            | null)?.toLowerCase() ?? "";
+        return (
+          code.includes(query) ||
+          name.includes(query) ||
+          title.includes(query)
+        );
       })
     : rows;
 
@@ -85,6 +149,27 @@ export default function CompletionsPage() {
     (r) =>
       (r as Record<string, unknown>).verification_status !== "pending"
   );
+
+  // Clamp + page the two lists. Pages are clamped so filtering down to a
+  // smaller result set can't strand the view on an empty page.
+  const pendingPageCount = Math.max(1, Math.ceil(pendingRows.length / PAGE_SIZE));
+  const reviewedPageCount = Math.max(1, Math.ceil(reviewedRows.length / PAGE_SIZE));
+  const safePendingPage = Math.min(pendingPage, pendingPageCount - 1);
+  const safeReviewedPage = Math.min(reviewedPage, reviewedPageCount - 1);
+  const pagedPending = pendingRows.slice(
+    safePendingPage * PAGE_SIZE,
+    safePendingPage * PAGE_SIZE + PAGE_SIZE
+  );
+  const pagedReviewed = reviewedRows.slice(
+    safeReviewedPage * PAGE_SIZE,
+    safeReviewedPage * PAGE_SIZE + PAGE_SIZE
+  );
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    setPendingPage(0);
+    setReviewedPage(0);
+  }
 
   return (
     <div className="space-y-6">
@@ -99,17 +184,18 @@ export default function CompletionsPage() {
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
           <CardTitle className="text-white text-base">
-            Scan or paste verification code
+            Search by code or traveler name
           </CardTitle>
           <CardDescription className="text-zinc-400">
-            Ask the user to show their code from the app, then verify below.
+            Paste the code the traveler shows you, or type their name to find
+            their pending completion.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Input
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            placeholder="e.g. TT-VR-1a2b..."
+            value={searchInput}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="e.g. KG4D78 or Juan Dela Cruz"
             className="bg-zinc-800 border-zinc-700 text-white"
           />
         </CardContent>
@@ -117,13 +203,17 @@ export default function CompletionsPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
-          Pending ? {pendingRows.length}
+          Pending · {pendingRows.length}
         </h2>
         <div className="space-y-3">
           {pendingRows.length === 0 && (
-            <p className="text-zinc-500 text-sm">Nothing to verify right now.</p>
+            <p className="text-zinc-500 text-sm">
+              {query
+                ? "No pending completions match your search."
+                : "Nothing to verify right now."}
+            </p>
           )}
-          {pendingRows.map((r) => {
+          {pagedPending.map((r) => {
             const rec = r as Record<string, unknown>;
             const ch = rec.challenges as Record<string, unknown> | null;
             const rewards = (ch?.rewards as Record<string, unknown>[]) ?? [];
@@ -147,6 +237,10 @@ export default function CompletionsPage() {
                           pending
                         </Badge>
                       </div>
+                      <p className="text-xs text-zinc-300 mt-1">
+                        Traveler:{" "}
+                        <span className="text-white">{travelerName(rec)}</span>
+                      </p>
                       <p className="text-xs text-zinc-400 mt-1">
                         Code:{" "}
                         <span className="font-mono text-zinc-200">
@@ -189,24 +283,34 @@ export default function CompletionsPage() {
             );
           })}
         </div>
+        <Paginator
+          page={safePendingPage}
+          pageCount={pendingPageCount}
+          total={pendingRows.length}
+          onPage={setPendingPage}
+        />
       </div>
 
       {reviewedRows.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-            Recently reviewed
+            Recently reviewed · {reviewedRows.length}
           </h2>
           <div className="space-y-2">
-            {reviewedRows.slice(0, 10).map((r) => {
+            {pagedReviewed.map((r) => {
               const rec = r as Record<string, unknown>;
               const status = rec.verification_status as string;
               const ch = rec.challenges as Record<string, unknown> | null;
               return (
                 <div
                   key={rec.id as string}
-                  className="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-sm"
+                  className="flex items-center justify-between gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-sm"
                 >
-                  <span className="text-zinc-300">{ch?.title as string}</span>
+                  <div className="min-w-0">
+                    <span className="text-zinc-300">{ch?.title as string}</span>
+                    <span className="text-zinc-600"> · </span>
+                    <span className="text-zinc-500">{travelerName(rec)}</span>
+                  </div>
                   <Badge
                     variant="outline"
                     className={STATUS_CLASS[status] ?? STATUS_CLASS.pending}
@@ -217,6 +321,12 @@ export default function CompletionsPage() {
               );
             })}
           </div>
+          <Paginator
+            page={safeReviewedPage}
+            pageCount={reviewedPageCount}
+            total={reviewedRows.length}
+            onPage={setReviewedPage}
+          />
         </div>
       )}
     </div>
