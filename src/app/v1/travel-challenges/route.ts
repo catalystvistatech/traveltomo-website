@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createApiClient } from "@/lib/supabase/api";
+import { createApiClient, requireUser } from "@/lib/supabase/api";
 
 /**
  * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
@@ -23,8 +23,9 @@ export async function GET(request: Request) {
   const maxRadiusMeters = maxRadiusKm * 1000;
 
   const supabase = createApiClient(request);
+  const auth = await requireUser(request);
 
-  const { data, error } = await supabase
+  let listQuery = supabase
     .from("travel_challenges")
     .select(
       `id, title, description, cover_url, completion_mode,
@@ -35,8 +36,17 @@ export async function GET(request: Request) {
        ),
        children:challenges!travel_challenge_id ( id )`
     )
-    .eq("status", "live")
-    .limit(limit * 3);
+    .eq("status", "live");
+
+  // Conflict of interest: never show a merchant their own quests in the
+  // player feed (they can't play them anyway - see migration 035). For
+  // anonymous callers there's nothing to exclude, which keeps that path
+  // publicly cacheable below.
+  if (auth.user) {
+    listQuery = listQuery.neq("merchant_id", auth.user.id);
+  }
+
+  const { data, error } = await listQuery.limit(limit * 3);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -130,13 +140,14 @@ export async function GET(request: Request) {
     },
     {
       headers: {
-        // Anonymous, location-keyed list. Quantizing lat/lng (~1km grid)
-        // on the client + this header lets the Vercel CDN collapse
-        // identical requests across users; revalidation in the background
-        // keeps the feed fresh without origin hits during cold-launch
-        // waves.
-        "Cache-Control":
-          "public, s-maxage=30, stale-while-revalidate=300",
+        // Anonymous responses are identical across callers, so the Vercel
+        // CDN can collapse them (location-keyed via client-quantized
+        // lat/lng). Authenticated responses exclude the caller's OWN
+        // quests, so they must be private (per-device cache only) to
+        // avoid leaking one merchant's filtered list to another user.
+        "Cache-Control": auth.user
+          ? "private, max-age=30"
+          : "public, s-maxage=30, stale-while-revalidate=300",
       },
     }
   );

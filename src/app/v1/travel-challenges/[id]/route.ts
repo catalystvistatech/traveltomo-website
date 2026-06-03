@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: Params) {
   const { data, error } = await supabase
     .from("travel_challenges")
     .select(
-      `id, title, description, cover_url, completion_mode, status,
+      `id, title, description, cover_url, completion_mode, status, merchant_id,
        big_reward_title, big_reward_description,
        big_reward_discount_type, big_reward_discount_value,
        business:businesses (
@@ -50,6 +50,16 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   if (!data) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Conflict of interest: a merchant can't open their own quest in the
+  // player flow. 404 (not 403) so we don't reveal it exists to anyone
+  // probing ids - it's simply not a quest THIS user can play.
+  if (
+    auth.user &&
+    (data as { merchant_id?: string }).merchant_id === auth.user.id
+  ) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

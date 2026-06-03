@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     .select(
       `id, travel_challenge_id, status, updated_at,
        travel_challenge:travel_challenges!inner (
-         id, title, cover_url, status,
+         id, title, cover_url, status, merchant_id,
          business:businesses!travel_challenges_business_id_fkey ( name, city ),
          children:challenges!travel_challenge_id ( id, status )
        )`
@@ -60,6 +60,7 @@ export async function GET(request: Request) {
       title: string;
       cover_url: string | null;
       status: string;
+      merchant_id: string;
       business: { name: string | null; city: string | null } | null;
       children: { id: string; status: string }[] | null;
     } | null;
@@ -67,8 +68,13 @@ export async function GET(request: Request) {
 
   const rows = (progressRows ?? []) as unknown as ProgressRow[];
   // Only surface quests that are still live (a merchant could have
-  // paused/archived a quest the traveler had in progress).
-  const liveRows = rows.filter((r) => r.travel_challenge?.status === "live");
+  // paused/archived a quest the traveler had in progress) and never the
+  // caller's OWN quests (conflict of interest - migration 035).
+  const liveRows = rows.filter(
+    (r) =>
+      r.travel_challenge?.status === "live" &&
+      r.travel_challenge?.merchant_id !== user.id
+  );
 
   if (liveRows.length === 0) {
     return NextResponse.json(
