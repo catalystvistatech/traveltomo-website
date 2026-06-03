@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   getCurrentUser,
   getRoleManagementData,
@@ -11,7 +19,7 @@ import {
   updateUserRole,
   type UserRole,
 } from "@/lib/actions/auth";
-import { Users, Building2 } from "lucide-react";
+import { Users, Building2, Search, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
@@ -27,11 +35,49 @@ type ManagedProfile = {
 
 const roleOptions: UserRole[] = ["user", "merchant", "admin", "superadmin"];
 
+type RequestFilter = "all" | "pending" | "approved" | "rejected" | "suspended";
+const requestFilters: { key: RequestFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "pending", label: "Pending" },
+  { key: "approved", label: "Approved" },
+  { key: "rejected", label: "Rejected" },
+  { key: "suspended", label: "Suspended" },
+];
+
+function roleBadgeClass(role: UserRole): string {
+  switch (role) {
+    case "superadmin":
+      return "bg-purple-600/20 text-purple-300";
+    case "admin":
+      return "bg-blue-600/20 text-blue-300";
+    case "merchant":
+      return "bg-emerald-600/20 text-emerald-300";
+    default:
+      return "bg-zinc-700 text-zinc-300";
+  }
+}
+
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "approved":
+      return "bg-green-600/20 text-green-400";
+    case "pending":
+      return "bg-yellow-600/20 text-yellow-400";
+    case "rejected":
+    case "suspended":
+      return "bg-red-600/20 text-red-400";
+    default:
+      return "bg-zinc-700 text-zinc-300";
+  }
+}
+
 export default function ManageMerchantsPage() {
   const [profilesList, setProfilesList] = useState<ManagedProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewerRole, setViewerRole] = useState<UserRole>("user");
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("all");
 
   async function loadData() {
     setIsLoading(true);
@@ -53,6 +99,29 @@ export default function ManageMerchantsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const canReview = viewerRole === "admin" || viewerRole === "superadmin";
+  const canManageRoles = viewerRole === "superadmin";
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return profilesList.filter((profile) => {
+      const status = profile.merchant_request_status ?? "none";
+      if (requestFilter !== "all" && status !== requestFilter) return false;
+      if (!q) return true;
+      const biz = (profile.businesses ?? [])[0] ?? null;
+      const haystack = [
+        profile.display_name,
+        biz?.name,
+        biz?.city,
+        biz?.category,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [profilesList, query, requestFilter]);
 
   if (isLoading) return <PageSkeleton variant="list" />;
 
@@ -88,171 +157,223 @@ export default function ManageMerchantsPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Merchants & Admins</h1>
         <p className="text-zinc-400 mt-1">
-          Superadmins can change all roles. Admins and superadmins can manually verify merchants.
+          Superadmins can change all roles. Admins and superadmins can manually
+          verify merchants.
         </p>
       </div>
 
-      {profilesList.length === 0 ? (
+      {/* Toolbar: search + status filter */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, business, city..."
+            className="bg-zinc-900 border-zinc-800 pl-9 text-white placeholder:text-zinc-500"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {requestFilters.map((f) => {
+            const active = requestFilter === f.key;
+            const count =
+              f.key === "all"
+                ? profilesList.length
+                : profilesList.filter(
+                    (p) => (p.merchant_request_status ?? "none") === f.key
+                  ).length;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setRequestFilter(f.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-white text-zinc-900"
+                    : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-zinc-800"
+                }`}
+              >
+                {f.label}
+                <span className={active ? "ml-1.5 text-zinc-500" : "ml-1.5 text-zinc-600"}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
         <Card className="bg-zinc-900 border-zinc-800">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-zinc-600 mb-4" />
             <h3 className="text-lg font-medium text-white">
-              No merchants yet
+              {profilesList.length === 0 ? "No merchants yet" : "No matches"}
             </h3>
             <p className="text-zinc-400 mt-1">
-              Merchants will appear here after they register.
+              {profilesList.length === 0
+                ? "Merchants will appear here after they register."
+                : "Try a different search or filter."}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {profilesList.map((profile) => {
-            const businesses = (profile.businesses ?? []) as Record<string, unknown>[];
-            const biz = businesses[0] ?? null;
-            const requestStatus = profile.merchant_request_status ?? "none";
+        <div className="overflow-hidden rounded-lg border border-zinc-800">
+          {/* Column header (desktop) */}
+          <div className="hidden md:grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500">
+            <span>Merchant</span>
+            <span className="w-28 text-center">Request</span>
+            <span className="w-[260px] text-right">Actions</span>
+          </div>
 
-            return (
-              <Card
-                key={profile.id as string}
-                className="bg-zinc-900 border-zinc-800"
-              >
-                <CardHeader className="flex flex-row items-start justify-between">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <CardTitle className="text-white truncate">
-                      {(profile.display_name as string) ?? "No name"}
-                    </CardTitle>
-                    {biz && (
-                      <p className="text-xs text-zinc-500">
-                        {biz.name as string}
-                      </p>
-                    )}
-                  </div>
-                  <Badge className="bg-blue-600/20 text-blue-400">
-                    {profile.role}
-                  </Badge>
-                </CardHeader>
-                <CardContent>
-                  {biz ? (
-                    <div className="space-y-2 text-sm">
-                      {(biz.category as string | null) && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-zinc-500">Category:</span>
-                          <span className="text-zinc-300">
-                            {biz.category as string}
-                          </span>
-                        </div>
-                      )}
-                      {(biz.city as string | null) && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-zinc-500">City:</span>
-                          <span className="text-zinc-300">
-                            {biz.city as string}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Business:</span>
-                        <Badge
-                          className={
-                            biz.verification_status === "approved"
-                              ? "bg-green-600/20 text-green-400"
-                              : biz.verification_status === "pending"
-                                ? "bg-yellow-600/20 text-yellow-400"
-                                : "bg-zinc-700 text-zinc-300"
-                          }
-                        >
-                          {(biz.verification_status as string) ?? "unsubmitted"}
+          <div className="divide-y divide-zinc-800">
+            {filtered.map((profile) => {
+              const businesses = (profile.businesses ?? []) as Record<
+                string,
+                unknown
+              >[];
+              const biz = businesses[0] ?? null;
+              const requestStatus = profile.merchant_request_status ?? "none";
+              const bizStatus =
+                (biz?.verification_status as string | null) ?? null;
+              const busy = loadingUserId === profile.id;
+              const secondary = [
+                biz?.name as string | undefined,
+                biz?.city as string | undefined,
+                biz?.category as string | undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+
+              return (
+                <div
+                  key={profile.id}
+                  className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-zinc-900/40 md:grid-cols-[1fr_auto_auto] md:items-center md:gap-4"
+                >
+                  {/* Identity */}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-medium text-white">
+                        {profile.display_name ?? "No name"}
+                      </span>
+                      <Badge className={roleBadgeClass(profile.role)}>
+                        {profile.role}
+                      </Badge>
+                      {bizStatus && (
+                        <Badge className={statusBadgeClass(bizStatus)}>
+                          biz: {bizStatus}
                         </Badge>
-                      </div>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500">
-                      No business profile yet
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      {secondary || "No business profile yet"}
+                      <span className="text-zinc-600">
+                        {" · joined "}
+                        {new Date(profile.created_at).toLocaleDateString()}
+                      </span>
                     </p>
-                  )}
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-zinc-500 text-xs">Merchant request:</span>
-                    <Badge
-                      className={
-                        requestStatus === "approved"
-                          ? "bg-green-600/20 text-green-400"
-                          : requestStatus === "pending"
-                            ? "bg-yellow-600/20 text-yellow-400"
-                            : requestStatus === "rejected" || requestStatus === "suspended"
-                              ? "bg-red-600/20 text-red-400"
-                              : "bg-zinc-700 text-zinc-300"
-                      }
-                    >
+                  </div>
+
+                  {/* Request status */}
+                  <div className="md:w-28 md:text-center">
+                    <Badge className={statusBadgeClass(requestStatus)}>
                       {requestStatus}
                     </Badge>
                   </div>
-                  <p className="text-xs text-zinc-600 mt-3">
-                    Joined{" "}
-                    {new Date(
-                      profile.created_at as string
-                    ).toLocaleDateString()}
-                  </p>
-                  {(viewerRole === "admin" || viewerRole === "superadmin") && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        disabled={loadingUserId === profile.id || requestStatus === "approved"}
-                        onClick={() => handleReview(profile.id, "approved")}
-                        className="bg-green-600 hover:bg-green-700"
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center justify-start gap-2 md:w-[260px] md:flex-nowrap md:justify-end">
+                    {canReview && (
+                      <Select
+                        value=""
+                        onValueChange={(value) =>
+                          handleReview(
+                            profile.id,
+                            value as "approved" | "rejected" | "suspended"
+                          )
+                        }
                       >
-                        Approve Merchant
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={loadingUserId === profile.id || requestStatus === "rejected"}
-                        onClick={() => handleReview(profile.id, "rejected")}
-                        className="border-red-600 text-red-400 hover:bg-red-600/10"
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={loadingUserId === profile.id || requestStatus === "suspended"}
-                        onClick={() => handleReview(profile.id, "suspended")}
-                        className="border-orange-600 text-orange-400 hover:bg-orange-600/10"
-                      >
-                        Suspend
-                      </Button>
-                    </div>
-                  )}
-                  {viewerRole === "superadmin" && (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {roleOptions.map((role) => (
-                          <Button
-                            key={role}
-                            size="sm"
-                            variant="outline"
-                            disabled={loadingUserId === profile.id || profile.role === role}
-                            onClick={() => handleRoleChange(profile.id, role)}
-                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        <SelectTrigger
+                          size="sm"
+                          disabled={busy}
+                          className="border-zinc-700 bg-zinc-900 text-zinc-200"
+                        >
+                          <MoreHorizontal className="size-4" />
+                          <span className="ml-1">Review</span>
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem
+                            value="approved"
+                            disabled={requestStatus === "approved"}
+                            className="text-green-400"
                           >
-                            Set {role}
-                          </Button>
-                        ))}
-                      </div>
+                            Approve
+                          </SelectItem>
+                          <SelectItem
+                            value="rejected"
+                            disabled={requestStatus === "rejected"}
+                            className="text-red-400"
+                          >
+                            Reject
+                          </SelectItem>
+                          <SelectItem
+                            value="suspended"
+                            disabled={requestStatus === "suspended"}
+                            className="text-orange-400"
+                          >
+                            Suspend
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {canManageRoles && (
+                      <Select
+                        value={profile.role}
+                        onValueChange={(value) =>
+                          handleRoleChange(profile.id, value as UserRole)
+                        }
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          disabled={busy}
+                          className="w-[120px] border-zinc-700 bg-zinc-900 text-zinc-200 capitalize"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          {roleOptions.map((role) => (
+                            <SelectItem
+                              key={role}
+                              value={role}
+                              className="capitalize"
+                            >
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {canManageRoles && (
                       <Button
                         size="sm"
                         variant="outline"
-                        render={<Link href={`/admin/manage/merchants/${profile.id}`} />}
-                        className="border-zinc-600 text-zinc-200 hover:bg-zinc-800 w-full justify-start"
+                        title="Manage business"
+                        render={
+                          <Link
+                            href={`/admin/manage/merchants/${profile.id}`}
+                          />
+                        }
+                        className="border-zinc-700 px-2 text-zinc-300 hover:bg-zinc-800"
                       >
-                        <Building2 className="h-3.5 w-3.5 mr-1.5" />
-                        Manage Business
+                        <Building2 className="size-4" />
                       </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
