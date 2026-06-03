@@ -33,7 +33,7 @@ const TIERS: {
   {
     key: "basic",
     title: "Basic",
-    price: "?99 / mo",
+    price: "₱99 / mo",
     icon: <Sparkles className="h-5 w-5" />,
     perks: [
       "Stay visible in recommendations",
@@ -44,7 +44,7 @@ const TIERS: {
   {
     key: "featured",
     title: "Featured",
-    price: "?299 / mo",
+    price: "₱299 / mo",
     icon: <Star className="h-5 w-5" />,
     perks: [
       "Boosted position in the dice pool",
@@ -55,7 +55,7 @@ const TIERS: {
   {
     key: "premium",
     title: "Premium",
-    price: "?799 / mo",
+    price: "₱799 / mo",
     icon: <Crown className="h-5 w-5" />,
     perks: [
       "Top-of-list placement",
@@ -219,7 +219,7 @@ export default function PromotePage() {
                       {r.tier as string}
                     </span>
                     <span className="text-zinc-500">
-                      {new Date(r.starts_at as string).toLocaleDateString()} ?{" "}
+                      {new Date(r.starts_at as string).toLocaleDateString()} ·{" "}
                       {new Date(r.ends_at as string).toLocaleDateString()}
                     </span>
                     <Badge
