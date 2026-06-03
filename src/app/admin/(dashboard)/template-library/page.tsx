@@ -71,8 +71,8 @@ export default function TemplateLibraryPage() {
                   {r.description as string}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  XP {r.suggested_xp as number} ? Radius{" "}
-                  {r.suggested_radius_meters as number}m ?{" "}
+                  XP {r.suggested_xp as number} · Radius{" "}
+                  {r.suggested_radius_meters as number}m ·{" "}
                   {(r.verification_type as string) ?? "gps"}
                 </p>
                 <Link

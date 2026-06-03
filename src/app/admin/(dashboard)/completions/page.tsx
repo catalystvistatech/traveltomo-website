@@ -117,7 +117,7 @@ export default function CompletionsPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
-          Pending ? {pendingRows.length}
+          Pending · {pendingRows.length}
         </h2>
         <div className="space-y-3">
           {pendingRows.length === 0 && (
