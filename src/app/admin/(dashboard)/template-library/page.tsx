@@ -44,7 +44,7 @@ export default function TemplateLibraryPage() {
       <div className="grid gap-3 md:grid-cols-2">
         {list.length === 0 && (
           <p className="text-zinc-500 text-sm">
-            No templates available yet ? your admins will publish some soon.
+            No templates available yet - your admins will publish some soon.
           </p>
         )}
         {list.map((t) => {

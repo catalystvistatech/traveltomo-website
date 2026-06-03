@@ -50,7 +50,7 @@ export default function CompletionsPage() {
       const r = await verifyCompletion(id);
       if ("error" in r) toast.error(r.error as string);
       else {
-        toast.success("Verified ? reward released");
+        toast.success("Verified - reward released");
         await reload();
       }
     });

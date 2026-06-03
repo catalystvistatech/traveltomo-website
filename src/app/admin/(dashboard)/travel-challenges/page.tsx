@@ -327,7 +327,7 @@ export default function TravelChallengesPage() {
                 onChange={(e) =>
                   setForm({ ...form, max_total_completions: e.target.value })
                 }
-                placeholder="e.g. 100 ? closes after that many redemptions"
+                placeholder="e.g. 100 - closes after that many redemptions"
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
