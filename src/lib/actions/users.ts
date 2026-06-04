@@ -39,40 +39,49 @@ export async function listUsers({
   page?: number;
   pageSize?: number;
 } = {}): Promise<{ users: ManagedUser[]; total: number; error?: string }> {
+  // The ENTIRE body is wrapped: a thrown server-action error is masked in
+  // production as a generic "Server Components render" message, hiding the
+  // real cause (auth, a missing service-role env var, or a query failure).
+  // Returning the message instead surfaces it in the page's toast.
   try {
-    await requireAdmin();
-  } catch {
-    return { users: [], total: 0, error: "Unauthorized" };
+    const me = await getCurrentUser();
+    if (!me || (me.role !== "admin" && me.role !== "superadmin")) {
+      return { users: [], total: 0, error: "Unauthorized" };
+    }
+
+    const admin = createAdminClient();
+
+    let query = admin
+      .from("profiles")
+      .select(
+        "id, email, display_name, avatar_url, role, merchant_request_status, banned_at, ban_reason, xp, created_at",
+        { count: "exact" }
+      )
+      .order("created_at", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+
+    if (role) {
+      query = query.eq("role", role);
+    }
+
+    if (search.trim()) {
+      query = query.or(
+        `email.ilike.%${search.trim()}%,display_name.ilike.%${search.trim()}%`
+      );
+    }
+
+    const { data, count, error } = await query;
+    if (error) {
+      console.error("[listUsers] query error:", error.message);
+      return { users: [], total: 0, error: `Could not load users: ${error.message}` };
+    }
+
+    return { users: (data ?? []) as ManagedUser[], total: count ?? 0 };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[listUsers] threw:", msg);
+    return { users: [], total: 0, error: `Could not load users: ${msg}` };
   }
-
-  const admin = createAdminClient();
-
-  let query = admin
-    .from("profiles")
-    .select(
-      "id, email, display_name, avatar_url, role, merchant_request_status, banned_at, ban_reason, xp, created_at",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
-
-  if (role) {
-    query = query.eq("role", role);
-  }
-
-  if (search.trim()) {
-    query = query.or(
-      `email.ilike.%${search.trim()}%,display_name.ilike.%${search.trim()}%`
-    );
-  }
-
-  const { data, count, error } = await query;
-  // Return the real error instead of throwing: a thrown server-action error
-  // is masked in production as a generic "Server Components render" message,
-  // which hides the actual cause (e.g. a stale PostgREST schema cache).
-  if (error) return { users: [], total: 0, error: error.message };
-
-  return { users: (data ?? []) as ManagedUser[], total: count ?? 0 };
 }
 
 export async function updateUserRole(userId: string, role: UserRole) {
