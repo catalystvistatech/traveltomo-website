@@ -8,8 +8,8 @@ import {
   unbanUser,
   deleteUser,
   type ManagedUser,
-  type UserRole,
 } from "@/lib/actions/users";
+import type { UserRole } from "@/lib/actions/auth";
 import {
   Card,
   CardContent,
