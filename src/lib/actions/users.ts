@@ -1,11 +1,16 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, type UserRole } from "@/lib/actions/auth";
+import { getCurrentUser } from "@/lib/actions/auth";
+import type { UserRole } from "@/lib/actions/auth";
 import { revalidatePath } from "next/cache";
 
-export type { UserRole };
+// NOTE: Do NOT re-export `UserRole` here. This is a "use server" module;
+// re-exporting an imported type (`export type { UserRole }`) made Turbopack
+// emit a runtime `export { UserRole }` against an erased binding, crashing
+// the whole actions module at evaluation ("ReferenceError: UserRole is not
+// defined") and 500ing every action on the Users page. Consumers import
+// the type straight from "@/lib/actions/auth" instead.
 
 export interface ManagedUser {
   id: string;
