@@ -7,7 +7,43 @@ import {
   extendedBusinessSchema,
   type ExtendedBusinessInput,
 } from "@/lib/validations/marketplace";
+import { planBusinessLimit, type PlanCode } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Resolves the current merchant's plan, how many businesses they've used,
+ * and whether they can add another. `businessLimit: null` means unlimited.
+ * Drives the dashboard's plan badge, the disabled "Add business" state, and
+ * the upgrade CTA. The hard cap is enforced by the DB trigger (migration
+ * 035); this is the friendly UX layer.
+ */
+export async function getMerchantPlan() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { planCode: "free" as PlanCode, businessLimit: 1, used: 0, canAddMore: false };
+  }
+  const supabase = await createClient();
+  const [{ data: profile }, { count }] = await Promise.all([
+    supabase.from("profiles").select("plan_code").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("businesses")
+      .select("id", { count: "exact", head: true })
+      .eq("merchant_id", user.id),
+  ]);
+
+  // Platform staff manage the whole catalogue and are uncapped.
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const planCode = ((profile?.plan_code as PlanCode | undefined) ?? "free");
+  const businessLimit = isStaff ? null : planBusinessLimit(planCode);
+  const used = count ?? 0;
+
+  return {
+    planCode,
+    businessLimit,
+    used,
+    canAddMore: businessLimit === null || used < businessLimit,
+  };
+}
 
 /**
  * Superadmins own their own businesses too -- they manage the platform end
@@ -139,6 +175,33 @@ export async function upsertBusiness(
 
     if (error) return { error: { _form: [error.message] } };
   } else {
+    // Plan gate (friendly pre-check; the DB trigger is the hard guard).
+    // Staff are uncapped; merchants are limited by their plan's allowance.
+    if (profile.role !== "admin" && profile.role !== "superadmin") {
+      const { data: planRow } = await supabase
+        .from("profiles")
+        .select("plan_code")
+        .eq("id", user.id)
+        .maybeSingle();
+      const planCode = (planRow?.plan_code as string | undefined) ?? "free";
+      const limit = planBusinessLimit(planCode);
+      if (limit !== null) {
+        const { count } = await supabase
+          .from("businesses")
+          .select("id", { count: "exact", head: true })
+          .eq("merchant_id", user.id);
+        if ((count ?? 0) >= limit) {
+          return {
+            error: {
+              _form: [
+                `Your ${planCode} plan allows ${limit} business${limit === 1 ? "" : "es"}. Upgrade your plan to add more.`,
+              ],
+            },
+          };
+        }
+      }
+    }
+
     // Insert new business. Superadmins skip the verification queue and
     // start out approved so they can immediately attach challenges.
     const insertPayload: Record<string, unknown> = {
