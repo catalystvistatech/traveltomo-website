@@ -42,6 +42,13 @@ export function AppSidebar({ user }: { user: UserProfile }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Billing/plans only apply to merchant accounts; admins & superadmins are
+  // uncapped platform staff, so the plan picker is meaningless for them.
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const visibleMerchantNav = merchantNav.filter(
+    (item) => !(item.href === "/admin/billing" && isStaff)
+  );
+
   async function handleSignOut() {
     await signOut();
     router.push("/admin/login");
@@ -63,7 +70,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
           <SidebarGroupLabel className="text-zinc-500">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {merchantNav.map((item) => (
+              {visibleMerchantNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton isActive={pathname === item.href} render={<Link href={item.href} />}>
                     <item.icon className="h-4 w-4" />
