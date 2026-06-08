@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureTravelChallengeProgress } from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
@@ -30,6 +31,39 @@ export async function POST(request: Request, { params }: Params) {
   let travelProgressId: string | null = null;
   if (challengeRow?.travel_challenge_id) {
     const travelChallengeId = challengeRow.travel_challenge_id as string;
+
+    // Time-box guard: a quest can only be entered while it's live and
+    // within its campaign window. This closes the gap between the hourly
+    // expiry cron runs, so an ended quest can never be (re)started. Read
+    // via the admin client so RLS can't hide an already-expired quest and
+    // let the guard fall through.
+    const { data: questRow } = await createAdminClient()
+      .from("travel_challenges")
+      .select("status, date_range_start, date_range_end")
+      .eq("id", travelChallengeId)
+      .maybeSingle();
+
+    if (questRow) {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+      const status = questRow.status as string;
+      const start = questRow.date_range_start as string | null;
+      const end = questRow.date_range_end as string | null;
+      const notLive = status !== "live" && status !== "approved";
+      const notStarted = !!start && today < start;
+      const ended = !!end && today > end;
+      if (notLive || notStarted || ended) {
+        return NextResponse.json(
+          {
+            error:
+              ended || status === "expired" ? "quest_expired" : "quest_unavailable",
+            detail: notStarted
+              ? "This quest hasn't started yet."
+              : "This quest has ended and can no longer be played.",
+          },
+          { status: 410 }
+        );
+      }
+    }
 
     // Lock-in: a player may only have ONE in-flight stop per quest at a
     // time. The partial unique index only guards one row per
