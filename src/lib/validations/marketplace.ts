@@ -9,6 +9,7 @@ export const ESTABLISHMENT_TYPES = [
   "bar",
   "shop",
   "spa",
+  "animal_themed",
   "other",
 ] as const;
 
@@ -26,6 +27,7 @@ export const ESTABLISHMENT_LABELS: Record<EstablishmentType, string> = {
   bar: "Bar",
   shop: "Shop",
   spa: "Spa",
+  animal_themed: "Animal-Themed",
   other: "Other",
 };
 

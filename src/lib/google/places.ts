@@ -33,7 +33,8 @@ export type EstablishmentType =
   | "adventure"
   | "landmark"
   | "shopping"
-  | "entertainment";
+  | "entertainment"
+  | "animal_themed";
 
 const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   restaurant: "restaurant",
@@ -44,6 +45,7 @@ const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   landmark: "tourist_attraction",
   shopping: "shopping_mall",
   entertainment: "amusement_park",
+  animal_themed: "zoo",
 };
 
 /** Normalized place shape returned to the mobile app. Mirrors the
