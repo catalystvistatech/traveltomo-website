@@ -33,7 +33,7 @@ export async function verifyCompletion(completionId: string) {
 
   const { data: completion, error: fetchError } = await supabase
     .from("challenge_completions")
-    .select("id, user_id, challenge_id, challenges!inner(title)")
+    .select("id, user_id, challenge_id, completed_at, challenges!inner(title)")
     .eq("id", completionId)
     .maybeSingle();
   if (fetchError) return { error: fetchError.message };
@@ -45,6 +45,14 @@ export async function verifyCompletion(completionId: string) {
       verified_at: new Date().toISOString(),
       verified_by: user.id,
       reward_released: true,
+      // Close out the stop: a verified stop is a finished stop. Without
+      // these, the row stays "in-flight" (completed_at null / status
+      // ongoing) and the accept route blocks the player from starting any
+      // new stop in the quest.
+      player_status: "claimed",
+      completed_at:
+        (completion as { completed_at?: string | null } | null)?.completed_at ??
+        new Date().toISOString(),
     })
     .eq("id", completionId);
   if (error) return { error: error.message };
@@ -80,7 +88,7 @@ export async function rejectCompletion(
 
   const { data: completion, error: fetchError } = await supabase
     .from("challenge_completions")
-    .select("id, user_id, challenge_id, challenges!inner(title)")
+    .select("id, user_id, challenge_id, completed_at, challenges!inner(title)")
     .eq("id", completionId)
     .maybeSingle();
   if (fetchError) return { error: fetchError.message };
@@ -92,6 +100,13 @@ export async function rejectCompletion(
       verified_at: new Date().toISOString(),
       verified_by: user.id,
       rejection_reason: reason,
+      // Terminal state: forfeited stops are no longer in-flight (so a new
+      // stop can be accepted) and become rollable again via
+      // derivePlayerStopStatus(forfeited -> available).
+      player_status: "forfeited",
+      completed_at:
+        (completion as { completed_at?: string | null } | null)?.completed_at ??
+        new Date().toISOString(),
     })
     .eq("id", completionId);
   if (error) return { error: error.message };

@@ -42,6 +42,12 @@ export async function POST(request: Request, { params }: Params) {
       .select("id, challenge_id, challenges!inner(travel_challenge_id)")
       .eq("user_id", user.id)
       .is("completed_at", null)
+      // Only a genuinely ongoing stop blocks a new accept. A verified /
+      // rejected stop is terminal even if a legacy row left completed_at
+      // null, so exclude those defensively (prevents a finished stop from
+      // permanently blocking the rest of the quest).
+      .eq("player_status", "ongoing")
+      .not("verification_status", "in", "(verified,rejected)")
       .eq("challenges.travel_challenge_id", travelChallengeId)
       .neq("challenge_id", id)
       .limit(1)
