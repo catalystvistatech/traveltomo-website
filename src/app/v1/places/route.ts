@@ -24,6 +24,7 @@ const VALID_ESTABLISHMENTS: EstablishmentType[] = [
   "landmark",
   "shopping",
   "entertainment",
+  "animal_themed",
 ];
 
 function parseTypes(raw: string | null): EstablishmentType[] {
