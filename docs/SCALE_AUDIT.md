@@ -1,4 +1,4 @@
-# Scale Audit — Path to 20K Concurrent Users
+# Scale Audit â€” Path to 20K Concurrent Users
 
 **Date:** 2026-05-24
 **Trigger:** Launch-day capacity planning for 20K users.
@@ -14,45 +14,45 @@ are the roadmap.
 
 ### iOS
 
-- **`ChallengeProofStorage.swift`** — proof upload tightened from
+- **`ChallengeProofStorage.swift`** â€” proof upload tightened from
   1600 px / q=0.82 to **1000 px / q=0.75**, and now strips EXIF / GPS /
   TIFF / IPTC metadata via `CGImageDestination` before upload. Average
   proof drops from ~400 KB to ~150-250 KB on the wire, and we no
   longer leak the device's GPS coordinates into a public bucket.
-- **`CardBackdrop` default target size** — was 320x400, decoded at 4x
+- **`CardBackdrop` default target size** â€” was 320x400, decoded at 4x
   on 160x200 cards. Now defaults to 200x260, which roughly halves
   decoded memory across the Home feed.
 
 ### Supabase
 
-- **Migration 024** — `challenge-proofs` bucket:
+- **Migration 024** â€” `challenge-proofs` bucket:
   - Read policy switched from `TO public` to `TO authenticated` so
     anon can no longer enumerate every user's selfies via
     `storage.from(...).list()`.
   - `file_size_limit` set to 1 MB; iOS uploads come in well under this.
-- **Migration 025** — five new indexes covering completions ordering
+- **Migration 025** â€” five new indexes covering completions ordering
   (`user_accepted`, `user_completed`), child-stop lookup
   (`challenges_travel_status`), the accept-race partial unique
   (`one_active_per_challenge`), and the spatial-filter pre-req
   (`businesses_location_approved`). Also dedupes the 13 leftover
   in-flight duplicate completion rows from before the unique index.
-- **Migration 026** — codifies the `public-assets` bucket (was
+- **Migration 026** â€” codifies the `public-assets` bucket (was
   created via dashboard, no migration record). 5 MB cap, public-read,
   merchants/admins-only write.
 
 ### Backend
 
-- **`/v1/places/[id]`** — `'published'` ? `'live'` typo fix; was
+- **`/v1/places/[id]`** â€” `'published'` ? `'live'` typo fix; was
   returning zero tagged challenges forever.
-- **`/v1/challenges/[id]/accept`** — race-safe via `ON CONFLICT DO
+- **`/v1/challenges/[id]/accept`** â€” race-safe via `ON CONFLICT DO
   NOTHING` against the new partial unique index. Concurrent retry
   storms now collapse into a single row.
 - **HTTP cache headers** on read-mostly routes:
-  - `/v1/travel-challenges` — `public, s-maxage=30, stale-while-revalidate=300`
-  - `/v1/travel-challenges/:id` — `private, max-age=20`
-  - `/v1/me/active-challenge` — `private, max-age=15`
-  - `/v1/me/rewards` — `private, max-age=30`
-- **`uploadTravelChallengeCover`** — uploads with
+  - `/v1/travel-challenges` â€” `public, s-maxage=30, stale-while-revalidate=300`
+  - `/v1/travel-challenges/:id` â€” `private, max-age=20`
+  - `/v1/me/active-challenge` â€” `private, max-age=15`
+  - `/v1/me/rewards` â€” `private, max-age=30`
+- **`uploadTravelChallengeCover`** â€” uploads with
   `Cache-Control: 31536000, immutable` and randomized filenames so
   the CDN can serve covers for a year without revalidating. Replaces
   the old `upsert: true` pattern that served stale bytes after a
@@ -60,9 +60,9 @@ are the roadmap.
 
 ---
 
-## ?? Deferred — roadmap
+## ?? Deferred â€” roadmap
 
-### P0 — Architecture changes
+### P0 â€” Architecture changes
 
 #### 1. Geo-filtered `/v1/recommendations` and `/v1/travel-challenges`
 
@@ -85,7 +85,7 @@ ordering by distance natively and scales to >100K businesses.
 **Current**: `recommended_challenges` (migration 014) calls
 `merchant_is_open_now(b.id)` and `merchant_has_active_promotion(c.merchant_id)`
 **per output row**. Each helper does its own `SELECT`. With 1000 live
-challenges × 20K users this is the second hottest path.
+challenges Ã— 20K users this is the second hottest path.
 
 **Target**: materialize these as columns on `businesses` /
 `merchant_subscriptions` updated by a cron job (every minute) or move
@@ -107,20 +107,20 @@ Google call.
 
 Replace `places.image_url` writes to point at our CDN-friendly URL.
 
-### P0 — iOS UI
+### P0 â€” iOS UI
 
 #### 4. `AsyncImage` ? `CachedRemoteImage` across the app
 
 **Current**: `MerchantScannerView`, `PlaceChallengesView`,
 `ProfileEditView`, `HomeHeaderView` still use stock `AsyncImage`. Each
 render re-downloads, no downsample, no eviction policy. A merchant
-verifying 50 proofs downloads 50 × ~400 KB per session, no reuse.
+verifying 50 proofs downloads 50 Ã— ~400 KB per session, no reuse.
 
 **Target**: replace every `AsyncImage` call site with
 `CachedRemoteImage` (or a circular avatar variant). Plain refactor,
 ~10 lines per call.
 
-### P0 — Anti-abuse
+### P0 â€” Anti-abuse
 
 #### 5. Rate limiting + signed receipts on `grant_skip_from_ad`
 
@@ -144,7 +144,7 @@ with no backoff.
 `(merchant_user_id, ip)`. On `not_found` results, increment and 429
 above e.g. 30/min. Log every failure for SIEM.
 
-### P1 — Smaller refactors
+### P1 â€” Smaller refactors
 
 #### 7. Server-side cover resize in `uploadTravelChallengeCover`
 
@@ -198,16 +198,16 @@ resulting `completion_id` per `(userId, challengeId)`.
 **Target**: wrap `travelChallenges`, `recommendations`,
 `travelChallengeDetail`, `activeChallenge` in
 `APICache.shared.value(for:ttl:)` with TTLs of 15-60 s. Pairs well
-with the new HTTP cache headers — iOS NSURLCache + APICache + Vercel
+with the new HTTP cache headers â€” iOS NSURLCache + APICache + Vercel
 CDN form three layers of defense.
 
-### P2 — Smaller wins
+### P2 â€” Smaller wins
 
 - Drop `MapViewModel.grantSkipFromAd`'s redundant `refreshSkipTokens()`
-  follow-up — the grant RPC already returns the new status.
+  follow-up â€” the grant RPC already returns the new status.
 - `toggleEstablishmentFilter` fires both `loadRecommendations` and
   `loadNearbyRoll`; one is enough.
-- `next.config.ts` — add `images.remotePatterns` for the Supabase
+- `next.config.ts` â€” add `images.remotePatterns` for the Supabase
   Storage hostname so the marketing site's `next/image` can serve
   WebP / AVIF.
 - Drop `MerchantScannerView`'s `<img>` for `CachedRemoteImage` (or at
@@ -236,5 +236,5 @@ Pre-launch, set up:
    show <10 GB/day at 20K DAU once the cover and proof pipelines are
    sized correctly.
 4. **Google Cloud billing**: Places API spend should be flat after the
-   photo proxy ships — a sudden spike means someone's hot-linking
+   photo proxy ships â€” a sudden spike means someone's hot-linking
    Google URLs again.

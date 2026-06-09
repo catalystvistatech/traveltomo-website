@@ -3,7 +3,7 @@
 -- Codifies the `public-assets` storage bucket used by merchants for
 -- travel-challenge cover photos. The audit found `uploadTravelChallengeCover`
 -- (src/lib/actions/travelChallenges.ts) writing to this bucket without a
--- migration ever creating it — meaning every fresh environment 404s on
+-- migration ever creating it â€” meaning every fresh environment 404s on
 -- the first cover upload until someone clicks it into existence in the
 -- dashboard. Locking the shape in here so it can't drift.
 --

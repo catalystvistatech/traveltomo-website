@@ -1,4 +1,4 @@
-# Quest Flow ù Product Spec
+# Quest Flow ÔøΩ Product Spec
 
 Source: client (Christine). This is the canonical 10-step traveler
 experience. Every product / engineering / design decision should map
@@ -38,7 +38,7 @@ Sees quests from **nearby merchants** on Home.
   stop count.
 
 **Code**
-- `src/app/v1/travel-challenges/route.ts` ù radius-filtered list
+- `src/app/v1/travel-challenges/route.ts` ÔøΩ radius-filtered list
 - iOS: `Presentation/Screens/Main/Home/Components/HomeCards.swift`
   (`TravelChallengesCard`)
 
@@ -51,7 +51,7 @@ Card shows: merchant, big reward title + description, # of challenges,
 area, mini-rewards along the way, current progress (if returning).
 
 **Code**
-- `src/app/v1/travel-challenges/[id]/route.ts` ù detail payload
+- `src/app/v1/travel-challenges/[id]/route.ts` ÔøΩ detail payload
 - iOS: `Presentation/Screens/Main/Quest/QuestPreviewView.swift`
 - Router: `AppRouter.questPreview(id:, title:)`
 
@@ -70,7 +70,7 @@ lands on a random challenge from the user's incomplete-stops pool.
 - `MapViewModel.startRoll()` + `playRollAnimation(landingOn:)`
 - `Presentation/Screens/Main/Map/Components/DiceView.swift` +
   `Dice3DView.swift`
-- `ChallengeMapView` ù full-screen roll overlay
+- `ChallengeMapView` ÔøΩ full-screen roll overlay
 
 ---
 
@@ -123,12 +123,12 @@ On success ? **RewardQRView** shows:
 
 After the user dismisses the reward QR, `returnToStackAfterReward()`
 reloads the quest. The pool excludes already-`claimed`
-stops so the next roll is honest. Sequence is unpredictable ù the user
+stops so the next roll is honest. Sequence is unpredictable ÔøΩ the user
 never knows which of the remaining stops they'll get.
 
 **Code**
 - `MapViewModel.returnToStackAfterReward()`
-- `src/lib/challenge-progress.ts` ù `derivePlayerStopStatus` excludes
+- `src/lib/challenge-progress.ts` ÔøΩ `derivePlayerStopStatus` excludes
   `claimed` / `submitted` from the rollable pool
 
 ---
@@ -140,14 +140,14 @@ Roll-mode accept sheet has a **Skip - re-roll (N left)** action.
 - Skip 1-3: `POST /v1/travel-challenges/:id/skip` ? consumes from
   `travel_challenge_progress.skips_used` (budget = `skips_limit`,
   default 3) ? re-rolls in place.
-- After 3 skips: `SideAdBanner` appears at the bottom of the map ù
+- After 3 skips: `SideAdBanner` appears at the bottom of the map ÔøΩ
   small, dismissable, with **Watch ad to skip** CTA that escalates to
   the rewarded ad overlay.
 - The legacy global skip pool (`profiles.free_skips_used`, 3 per 3h)
   still backs nearby Roll/Route browse outside of quests.
 
 **Code**
-- Migration `supabase/021_quest_skips.sql` ù `consume_quest_skip` RPC
+- Migration `supabase/021_quest_skips.sql` ÔøΩ `consume_quest_skip` RPC
 - `src/app/v1/travel-challenges/[id]/skip/route.ts`
 - iOS: `MapViewModel.skipQuestStop(...)` +
   `Presentation/Screens/Main/Map/Components/SideAdBanner.swift`
@@ -165,10 +165,10 @@ schema-aligned name). Once every stop's
 
 **Code**
 - `src/lib/validations/marketplace.ts` (constant)
-- `src/lib/actions/travelChallenges.ts` ù
+- `src/lib/actions/travelChallenges.ts` ÔøΩ
   `submitTravelChallengeForReview` + `reviewTravelChallenge` enforce
   the 6-stop minimum
-- `src/lib/challenge-progress.ts` ù
+- `src/lib/challenge-progress.ts` ÔøΩ
   `syncTravelChallengeProgressCompletion`
 
 ---
@@ -224,7 +224,7 @@ Find your own adventure at https://www.traveltomo.app
 | # | Challenge | Mini reward |
 |---|-----------|-------------|
 | 1 | Find cats to feed at the CCTV operator house near CDC | Cat feeds OR voucher ? |
-| 2 | Feed the cats ù take a selfie! | +50 XP ? |
+| 2 | Feed the cats ÔøΩ take a selfie! | +50 XP ? |
 | 3 | Find the hidden mural near Gate 3 | 10% off souvenir shop ? |
 | 4 | Take a photo of the oldest tree at the CDC entrance | +50 XP ? |
 | 5 | Buy a snack from the nearest sari-sari store | +50 XP ? |
