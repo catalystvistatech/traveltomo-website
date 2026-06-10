@@ -52,34 +52,6 @@ async function getApprovedBusiness(userId: string) {
   return rows.find((b) => b.verification_status === "approved") ?? rows[0] ?? null;
 }
 
-async function getAllBusinesses(userId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("businesses")
-    .select("id, verification_status, latitude, longitude, service_radius_meters")
-    .eq("merchant_id", userId);
-  return data ?? [];
-}
-
-// Haversine distance in meters
-function distanceMeters(
-  aLat: number,
-  aLng: number,
-  bLat: number,
-  bLng: number
-) {
-  const R = 6371000;
-  const toRad = (v: number) => (v * Math.PI) / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) *
-      Math.cos(toRad(bLat)) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 /**
  * Returns the calling merchant's library rewards (`challenge_id IS NULL`)
  * so the travel-challenge form can offer a "pick from library" dropdown
@@ -481,31 +453,6 @@ export async function addChildChallenge(
   const biz = await getApprovedBusiness(parent.merchant_id);
   if (!biz) return { error: { _form: ["Business profile missing"] } };
 
-  // Radius check only applies when the travel challenge is explicitly linked
-  // to a specific business. Unlinked TCs are city-tours — stops can be anywhere.
-  const tcBusinessId = (parent as Record<string, unknown>).business_id as string | null;
-  if (tcBusinessId) {
-    const allBiz = await getAllBusinesses(parent.merchant_id);
-    const linkedBiz = allBiz.find((b) => b.id === tcBusinessId);
-    if (linkedBiz?.latitude != null && linkedBiz?.longitude != null) {
-      const dist = distanceMeters(
-        linkedBiz.latitude!,
-        linkedBiz.longitude!,
-        parsed.data.latitude,
-        parsed.data.longitude
-      );
-      if (dist > (linkedBiz.service_radius_meters ?? 2000)) {
-        return {
-          error: {
-            _form: [
-              `Challenge location is ${Math.round(dist)}m from your business — outside its ${linkedBiz.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
-            ],
-          },
-        };
-      }
-    }
-  }
-
   const challengeQR = `TT-CH-${randomUUID()}`;
   const rewardQR = `TT-RW-${randomUUID()}`;
 
@@ -591,37 +538,6 @@ export async function updateChildChallenge(
   }
   if (!existing.travel_challenge_id) {
     return { error: { _form: ["Challenge is not part of a travel-challenge set"] } };
-  }
-
-  // Mirror the radius constraint from addChildChallenge so editing
-  // can't sneak a stop outside the parent business's service radius.
-  const { data: parent } = await supabase
-    .from("travel_challenges")
-    .select("id, merchant_id, business_id")
-    .eq("id", existing.travel_challenge_id)
-    .maybeSingle();
-  const tcBusinessId =
-    (parent as Record<string, unknown> | null)?.business_id as string | null;
-  if (tcBusinessId) {
-    const allBiz = await getAllBusinesses(existing.merchant_id as string);
-    const linkedBiz = allBiz.find((b) => b.id === tcBusinessId);
-    if (linkedBiz?.latitude != null && linkedBiz?.longitude != null) {
-      const dist = distanceMeters(
-        linkedBiz.latitude!,
-        linkedBiz.longitude!,
-        parsed.data.latitude,
-        parsed.data.longitude
-      );
-      if (dist > (linkedBiz.service_radius_meters ?? 2000)) {
-        return {
-          error: {
-            _form: [
-              `Challenge location is ${Math.round(dist)}m from your business — outside its ${linkedBiz.service_radius_meters ?? 2000}m service radius. Move the pin closer or increase your service radius in Business Profiles.`,
-            ],
-          },
-        };
-      }
-    }
   }
 
   const { error: chErr } = await supabase
