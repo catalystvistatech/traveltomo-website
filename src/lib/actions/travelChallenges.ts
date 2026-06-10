@@ -408,7 +408,11 @@ export async function reviewTravelChallenge(
 
 export async function addChildChallenge(
   travelChallengeId: string,
-  input: unknown
+  input: unknown,
+  // When true, the new stop is forced to `draft` even if the parent set is
+  // already live -- lets a merchant stage a stop without exposing it to
+  // players until the set is (re)published.
+  asDraft = false
 ) {
   const parsed = childChallengeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
@@ -482,8 +486,8 @@ export async function addChildChallenge(
         : null,
       quiz_answer: parsed.data.quiz_answer || null,
       qr_code_value: challengeQR,
-      status: parentLive ? "live" : "draft",
-      approved_at: parentLive ? new Date().toISOString() : null,
+      status: !asDraft && parentLive ? "live" : "draft",
+      approved_at: !asDraft && parentLive ? new Date().toISOString() : null,
     })
     .select("id")
     .single();

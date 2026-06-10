@@ -295,7 +295,7 @@ export default function TravelChallengeDetailPage({
     Number.isFinite(parseFloat(child.latitude)) &&
     Number.isFinite(parseFloat(child.longitude));
 
-  async function handleAddChild() {
+  async function handleAddChild(asDraft = false) {
     setSaving(true);
     const isGps = child.verification_type === "gps";
     const payload = {
@@ -314,13 +314,19 @@ export default function TravelChallengeDetailPage({
     };
     const r = editingChildId
       ? await updateChildChallenge(editingChildId, payload)
-      : await addChildChallenge(id, payload);
+      : await addChildChallenge(id, payload, asDraft);
     setSaving(false);
     if ("error" in r) {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success(editingChildId ? "Challenge updated" : "Challenge added");
+    toast.success(
+      editingChildId
+        ? "Challenge updated"
+        : asDraft
+          ? "Stop saved as draft"
+          : "Challenge added"
+    );
     setShowChild(false);
     setEditingChildId(null);
     setChild({ ...emptyChild });
@@ -1216,7 +1222,7 @@ export default function TravelChallengeDetailPage({
 
             <div className="flex gap-2 pt-2">
               <Button
-                onClick={handleAddChild}
+                onClick={() => handleAddChild(false)}
                 disabled={saving}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
@@ -1226,6 +1232,17 @@ export default function TravelChallengeDetailPage({
                     ? "Save Changes"
                     : "Add Challenge"}
               </Button>
+              {!editingChildId && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleAddChild(true)}
+                  disabled={saving}
+                  title="Add this stop but keep it as a draft — it won't be shown to players until the set is published."
+                  className="border-zinc-700 text-zinc-200"
+                >
+                  Save as Draft
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 onClick={() => {

@@ -436,7 +436,7 @@ function Footer() {
               Terms
             </a>
             <a
-              href="mailto:hello@traveltomo.app"
+              href="mailto:info@traveltomo.app"
               className="hover:text-white transition-colors"
             >
               Contact
