@@ -47,6 +47,27 @@ export async function POST(request: Request) {
     const plan: PlanCode = planForPriceId(priceId) ?? metaPlan ?? "free";
     const isActive = sub.status === "active" || sub.status === "trialing";
 
+    // Traveler "Unlimited Pass" subscriptions carry metadata.plan =
+    // 'traveler_unlimited' (or use the dedicated price). These grant the
+    // consumer no-ads entitlement, NOT a merchant business-limit plan.
+    const isTraveler =
+      sub.metadata?.plan === "traveler_unlimited" ||
+      (priceId != null &&
+        priceId === process.env.STRIPE_PRICE_TRAVELER_UNLIMITED);
+
+    if (isTraveler) {
+      await admin
+        .from("profiles")
+        .update({
+          is_unlimited: isActive,
+          unlimited_status: sub.status,
+          unlimited_renews_at: periodEndIso(sub),
+          stripe_subscription_id: sub.id,
+        })
+        .eq("stripe_customer_id", customerId);
+      return;
+    }
+
     await admin
       .from("profiles")
       .update({
@@ -82,6 +103,8 @@ export async function POST(request: Request) {
         .update({
           plan_code: "free",
           plan_status: "canceled",
+          is_unlimited: false,
+          unlimited_status: "canceled",
           stripe_subscription_id: null,
         })
         .eq("stripe_customer_id", customerId);
