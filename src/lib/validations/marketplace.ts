@@ -152,7 +152,7 @@ export const childChallengeSchema = z.object({
   type: z.enum(["checkin", "photo", "qr", "quiz"]).default("checkin"),
   verification_type: z
     .enum(["gps", "qr_scan", "photo_upload", "quiz_answer"])
-    .default("gps"),
+    .default("photo_upload"),
   establishment_type: z.enum(ESTABLISHMENT_TYPES).optional(),
   xp_reward: z.coerce.number().int().min(10, "XP reward must be at least 10").max(500, "XP reward cannot exceed 500").default(50),
   radius_meters: z.coerce.number().int().min(10, "Radius must be at least 10m").max(1000, "Radius cannot exceed 1000m").default(50),

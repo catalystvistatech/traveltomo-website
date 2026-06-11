@@ -38,7 +38,7 @@ const empty = {
   establishment_type: undefined as EstablishmentType | undefined,
   suggested_xp: 50,
   suggested_radius_meters: 50,
-  verification_type: "gps" as "gps" | "qr_scan" | "photo_upload" | "quiz_answer",
+  verification_type: "photo_upload" as "gps" | "qr_scan" | "photo_upload" | "quiz_answer",
   cover_url: "",
   is_published: true,
 };

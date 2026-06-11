@@ -88,7 +88,7 @@ const emptyChild = {
   description: "",
   instructions: "",
   type: "checkin" as "checkin" | "photo" | "qr" | "quiz",
-  verification_type: "gps" as
+  verification_type: "photo_upload" as
     | "gps"
     | "qr_scan"
     | "photo_upload"
