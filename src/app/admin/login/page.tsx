@@ -67,6 +67,24 @@ export default function LoginPage() {
     router.refresh();
   }
 
+  async function handleOAuth(provider: "google" | "apple") {
+    setError(null);
+    setLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/admin/auth/callback?next=/admin`,
+      },
+    });
+    // On success the browser is redirected to the provider, so we only
+    // reach here when starting the flow failed.
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    }
+  }
+
   async function handleResend() {
     if (!pendingEmail) return;
     setError(null);
@@ -194,6 +212,34 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <span className="text-xs text-zinc-500">Or continue with</span>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => handleOAuth("google")}
+              className="w-full bg-transparent border-zinc-700 text-zinc-100 hover:bg-zinc-800 hover:text-white gap-2"
+            >
+              <GoogleIcon />
+              Continue with Google
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => handleOAuth("apple")}
+              className="w-full bg-transparent border-zinc-700 text-zinc-100 hover:bg-zinc-800 hover:text-white gap-2"
+            >
+              <AppleIcon />
+              Continue with Apple
+            </Button>
+          </div>
           {/* Persistent escape hatch: Supabase reports unconfirmed
               accounts as `invalid_credentials` now, so this link is the
               only reliable way for a merchant who registered but never
@@ -220,6 +266,25 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-8 20-20 0-1.3-.1-2.3-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.2C29.2 35 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-6.9l-6.5 5C9.6 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.6l6.3 5.2C41.8 35.7 44 30.3 44 24c0-1.3-.1-2.3-.4-3.5z" />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 384 512" fill="currentColor" aria-hidden="true">
+      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C73.3 141.2 24 184.5 24 273.5c0 26.3 4.8 53.5 14.4 81.5 12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-92.2zM262.6 89.5c25.5-30.3 23.2-57.9 22.5-67.8-22.6 1.3-48.7 15.4-63.6 32.8-16.4 18.8-26 41.9-23.9 67.3 24.4 1.9 46.7-10.5 65-32.3z" />
+    </svg>
   );
 }
 
