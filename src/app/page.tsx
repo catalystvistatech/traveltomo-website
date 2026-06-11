@@ -441,6 +441,9 @@ function Footer() {
             >
               Contact
             </a>
+            <Link href="/help" className="hover:text-white transition-colors">
+              Help
+            </Link>
             <Link
               href="/admin/login"
               className="hover:text-white transition-colors"
