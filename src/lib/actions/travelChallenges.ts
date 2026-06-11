@@ -99,6 +99,7 @@ export async function listTravelChallenges() {
     .select(
       "*, challenges(count)"
     )
+    .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
   if (!canViewAll) query.eq("merchant_id", user.id);
@@ -596,13 +597,271 @@ export async function deleteTravelChallenge(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
 
+  // Preserve a reusable copy in the merchant's quest-template library before
+  // trashing, so a deleted quest can be re-created later even after the
+  // 30-day trash window passes.
+  await saveQuestAsTemplate(id);
+
   const supabase = await createClient();
   const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
-  const query = supabase.from("travel_challenges").delete().eq("id", id);
-  const { error } = await (isAdmin ? query : query.eq("merchant_id", gate.user.id));
+  // Soft delete: move to the 30-day Trash instead of hard-deleting. Setting
+  // status='deleted' also removes it from every traveler-facing query (which
+  // filter status='live') without extra filters.
+  let upd = supabase
+    .from("travel_challenges")
+    .update({ status: "deleted", deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (!isAdmin) upd = upd.eq("merchant_id", gate.user.id);
+  const { error } = await upd;
   if (error) return { error: error.message };
   revalidatePath("/admin", "layout");
   return { success: true };
+}
+
+export async function restoreTravelChallenge(id: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  const supabase = await createClient();
+  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+  // Restore as a draft so the merchant re-publishes (and admins re-review).
+  let upd = supabase
+    .from("travel_challenges")
+    .update({ status: "draft", deleted_at: null })
+    .eq("id", id)
+    .eq("status", "deleted");
+  if (!isAdmin) upd = upd.eq("merchant_id", gate.user.id);
+  const { error } = await upd;
+  if (error) return { error: error.message };
+  revalidatePath("/admin", "layout");
+  return { success: true };
+}
+
+export async function purgeTravelChallenge(id: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  const supabase = await createClient();
+  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+  let del = supabase
+    .from("travel_challenges")
+    .delete()
+    .eq("id", id)
+    .eq("status", "deleted");
+  if (!isAdmin) del = del.eq("merchant_id", gate.user.id);
+  const { error } = await del;
+  if (error) return { error: error.message };
+  revalidatePath("/admin", "layout");
+  return { success: true };
+}
+
+export async function listDeletedTravelChallenges() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const canViewAll = user.role === "admin" || user.role === "superadmin";
+  const query = supabase
+    .from("travel_challenges")
+    .select("id, title, description, deleted_at, challenges(count)")
+    .eq("status", "deleted")
+    .order("deleted_at", { ascending: false });
+  if (!canViewAll) query.eq("merchant_id", user.id);
+  const { data } = await query;
+  return data ?? [];
+}
+
+// MARK: - Quest templates (whole-quest snapshots) --------------------------
+
+export async function saveQuestAsTemplate(id: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  const supabase = await createClient();
+
+  const { data: quest } = await supabase
+    .from("travel_challenges")
+    .select(
+      "id, merchant_id, title, description, completion_mode, max_total_completions, big_reward_title, big_reward_description, big_reward_discount_type, big_reward_discount_value, challenges(title, description, instructions, type, verification_type, establishment_type, xp_reward, radius_meters, latitude, longitude, duration_minutes, time_of_day_start, time_of_day_end, days_of_week, max_completions, quiz_question, quiz_choices, quiz_answer, rewards(title, description, discount_type, discount_value))"
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!quest) return { error: "Quest not found" };
+
+  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+  if (!isAdmin && quest.merchant_id !== gate.user.id) {
+    return { error: "Not your quest" };
+  }
+
+  const stops = ((quest.challenges as Record<string, unknown>[]) ?? []).map((c) => {
+    const reward = ((c.rewards as Record<string, unknown>[]) ?? [])[0] ?? null;
+    return {
+      title: c.title,
+      description: c.description,
+      instructions: c.instructions,
+      type: c.type,
+      verification_type: c.verification_type,
+      establishment_type: c.establishment_type,
+      xp_reward: c.xp_reward,
+      radius_meters: c.radius_meters,
+      latitude: c.latitude,
+      longitude: c.longitude,
+      duration_minutes: c.duration_minutes,
+      time_of_day_start: c.time_of_day_start,
+      time_of_day_end: c.time_of_day_end,
+      days_of_week: c.days_of_week,
+      max_completions: c.max_completions,
+      quiz_question: c.quiz_question,
+      quiz_choices: c.quiz_choices,
+      quiz_answer: c.quiz_answer,
+      reward: reward
+        ? {
+            title: reward.title,
+            description: reward.description,
+            discount_type: reward.discount_type,
+            discount_value: reward.discount_value,
+          }
+        : null,
+    };
+  });
+
+  const snapshot = {
+    quest: {
+      title: quest.title,
+      description: quest.description,
+      completion_mode: quest.completion_mode,
+      max_total_completions: quest.max_total_completions,
+      big_reward_title: quest.big_reward_title,
+      big_reward_description: quest.big_reward_description,
+      big_reward_discount_type: quest.big_reward_discount_type,
+      big_reward_discount_value: quest.big_reward_discount_value,
+    },
+    stops,
+  };
+
+  const { error } = await supabase.from("quest_templates").insert({
+    merchant_id: gate.user.id,
+    title: quest.title as string,
+    description: (quest.description as string | null) ?? null,
+    stop_count: stops.length,
+    snapshot,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin", "layout");
+  return { success: true };
+}
+
+export async function listQuestTemplates() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("quest_templates")
+    .select("id, title, description, stop_count, created_at")
+    .eq("merchant_id", user.id)
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
+
+export async function deleteQuestTemplate(id: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("quest_templates")
+    .delete()
+    .eq("id", id)
+    .eq("merchant_id", gate.user.id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin", "layout");
+  return { success: true };
+}
+
+export async function createQuestFromTemplate(templateId: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: { _form: [gate.error] } };
+  const supabase = await createClient();
+
+  const { data: tpl } = await supabase
+    .from("quest_templates")
+    .select("snapshot")
+    .eq("id", templateId)
+    .eq("merchant_id", gate.user.id)
+    .maybeSingle();
+  if (!tpl) return { error: { _form: ["Template not found"] } };
+
+  const snapshot = tpl.snapshot as {
+    quest: Record<string, unknown>;
+    stops: Record<string, unknown>[];
+  };
+
+  const biz = await getApprovedBusiness(gate.user.id);
+  if (!biz) return { error: { _form: ["Create a business first."] } };
+
+  const q = snapshot.quest ?? {};
+  const { data: quest, error: qErr } = await supabase
+    .from("travel_challenges")
+    .insert({
+      merchant_id: gate.user.id,
+      business_id: biz.id,
+      title: `${(q.title as string) ?? "Untitled quest"} (copy)`,
+      description: (q.description as string | null) ?? null,
+      status: "draft",
+      completion_mode: (q.completion_mode as string) ?? "any",
+      max_total_completions: (q.max_total_completions as number | null) ?? null,
+      big_reward_title: (q.big_reward_title as string | null) ?? null,
+      big_reward_description: (q.big_reward_description as string | null) ?? null,
+      big_reward_discount_type: (q.big_reward_discount_type as string | null) ?? null,
+      big_reward_discount_value: (q.big_reward_discount_value as number | null) ?? null,
+    })
+    .select("id")
+    .single();
+  if (qErr || !quest) {
+    return { error: { _form: [qErr?.message ?? "Failed to create quest"] } };
+  }
+
+  for (const s of snapshot.stops ?? []) {
+    const { data: ch } = await supabase
+      .from("challenges")
+      .insert({
+        merchant_id: gate.user.id,
+        travel_challenge_id: quest.id,
+        title: (s.title as string) ?? "Stop",
+        description: (s.description as string) ?? "",
+        instructions: (s.instructions as string | null) ?? null,
+        type: (s.type as string) ?? "checkin",
+        verification_type: (s.verification_type as string) ?? "photo_upload",
+        establishment_type: (s.establishment_type as string | null) ?? null,
+        xp_reward: (s.xp_reward as number) ?? 50,
+        radius_meters: (s.radius_meters as number) ?? 50,
+        latitude: (s.latitude as number | null) ?? null,
+        longitude: (s.longitude as number | null) ?? null,
+        duration_minutes: (s.duration_minutes as number | null) ?? null,
+        time_of_day_start: (s.time_of_day_start as string | null) ?? null,
+        time_of_day_end: (s.time_of_day_end as string | null) ?? null,
+        days_of_week: (s.days_of_week as number[] | null) ?? [1, 2, 3, 4, 5, 6, 7],
+        max_completions: (s.max_completions as number | null) ?? null,
+        quiz_question: (s.quiz_question as string | null) ?? null,
+        quiz_choices: s.quiz_choices ?? null,
+        quiz_answer: (s.quiz_answer as string | null) ?? null,
+        qr_code_value: `TT-CH-${randomUUID()}`,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+    if (!ch) continue;
+    const reward = s.reward as Record<string, unknown> | null;
+    if (reward) {
+      await supabase.from("rewards").insert({
+        challenge_id: ch.id,
+        merchant_id: gate.user.id,
+        title: (reward.title as string) ?? "Reward",
+        description: (reward.description as string | null) ?? null,
+        discount_type: (reward.discount_type as string) ?? "freebie",
+        discount_value: (reward.discount_value as number | null) ?? null,
+        qr_code_value: `TT-RW-${randomUUID()}`,
+      });
+    }
+  }
+
+  revalidatePath("/admin", "layout");
+  return { success: true, id: quest.id as string };
 }
 
 export async function removeChildChallenge(childId: string) {

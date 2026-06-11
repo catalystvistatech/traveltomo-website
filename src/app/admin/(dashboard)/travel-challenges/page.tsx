@@ -6,6 +6,13 @@ import {
   listTravelChallenges,
   createTravelChallenge,
   deleteTravelChallenge,
+  restoreTravelChallenge,
+  purgeTravelChallenge,
+  listDeletedTravelChallenges,
+  saveQuestAsTemplate,
+  listQuestTemplates,
+  createQuestFromTemplate,
+  deleteQuestTemplate,
   uploadTravelChallengeCover,
   listMerchantBusinesses,
   listMerchantLibraryRewards,
@@ -29,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, ImagePlus, X, Trash2 } from "lucide-react";
+import { Plus, ImagePlus, X, Trash2, BookmarkPlus, RotateCcw } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
@@ -56,6 +63,8 @@ export default function TravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [businesses, setBusinesses] = useState<{ id: string; name: string; verification_status: string }[]>([]);
   const [libraryRewards, setLibraryRewards] = useState<LibraryReward[]>([]);
+  const [deletedRows, setDeletedRows] = useState<Record<string, unknown>[]>([]);
+  const [questTemplates, setQuestTemplates] = useState<Record<string, unknown>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,14 +90,18 @@ export default function TravelChallengesPage() {
 
   async function reload() {
     setIsLoading(true);
-    const [tcRows, bizList, rewards] = await Promise.all([
+    const [tcRows, bizList, rewards, deleted, templates] = await Promise.all([
       listTravelChallenges(),
       listMerchantBusinesses(),
       listMerchantLibraryRewards(),
+      listDeletedTravelChallenges(),
+      listQuestTemplates(),
     ]);
     setRows(tcRows);
     setBusinesses(bizList);
     setLibraryRewards(rewards);
+    setDeletedRows(deleted as Record<string, unknown>[]);
+    setQuestTemplates(templates as Record<string, unknown>[]);
     if (!form.business_id) {
       const approved = bizList.find((b) => b.verification_status === "approved");
       if (approved) setForm((f) => ({ ...f, business_id: approved.id }));
@@ -154,11 +167,58 @@ export default function TravelChallengesPage() {
   }
 
   async function handleDelete(id: string, title: string) {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!confirm(`Move "${title}" to Trash? You can restore it within 30 days, and a template copy is saved.`)) return;
     const r = await deleteTravelChallenge(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Quest deleted");
+      toast.success("Moved to Trash — restorable for 30 days");
+      await reload();
+    }
+  }
+
+  async function handleRestore(id: string) {
+    const r = await restoreTravelChallenge(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Restored as draft");
+      await reload();
+    }
+  }
+
+  async function handlePurge(id: string, title: string) {
+    if (!confirm(`Permanently delete "${title}"? This cannot be undone.`)) return;
+    const r = await purgeTravelChallenge(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Permanently deleted");
+      await reload();
+    }
+  }
+
+  async function handleSaveTemplate(id: string) {
+    const r = await saveQuestAsTemplate(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Saved to your quest templates");
+      await reload();
+    }
+  }
+
+  async function handleUseTemplate(id: string) {
+    const r = await createQuestFromTemplate(id);
+    if ("error" in r) toast.error(formatActionError(r.error as Record<string, unknown>));
+    else {
+      toast.success("Quest created from template (draft)");
+      await reload();
+    }
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    if (!confirm("Delete this quest template?")) return;
+    const r = await deleteQuestTemplate(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Template deleted");
       await reload();
     }
   }
@@ -555,6 +615,18 @@ export default function TravelChallengesPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  handleSaveTemplate(rec.id as string);
+                }}
+                className="absolute top-3 right-12 p-2 rounded-lg text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
+                title="Save as template"
+              >
+                <BookmarkPlus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   handleDelete(rec.id as string, rec.title as string);
                 }}
                 className="absolute top-3 right-3 p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
@@ -571,6 +643,95 @@ export default function TravelChallengesPage() {
           </p>
         )}
       </div>
+
+      {questTemplates.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
+            My Quest Templates
+          </h2>
+          <div className="grid gap-2">
+            {questTemplates.map((t) => (
+              <div
+                key={t.id as string}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {t.title as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {(t.stop_count as number) ?? 0} stop
+                    {(t.stop_count as number) === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={() => handleUseTemplate(t.id as string)}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Create quest
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteTemplate(t.id as string)}
+                    className="border-zinc-700 text-zinc-400"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {deletedRows.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+            Recently deleted (restorable for 30 days)
+          </h2>
+          <div className="grid gap-2">
+            {deletedRows.map((d) => (
+              <div
+                key={d.id as string}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-300 truncate">
+                    {d.title as string}
+                  </p>
+                  <p className="text-xs text-zinc-600">
+                    Deleted{" "}
+                    {d.deleted_at
+                      ? new Date(d.deleted_at as string).toLocaleDateString()
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRestore(d.id as string)}
+                    className="border-zinc-700 text-zinc-200 gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Restore
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handlePurge(d.id as string, d.title as string)}
+                    className="border-red-800 text-red-400"
+                  >
+                    Delete forever
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
