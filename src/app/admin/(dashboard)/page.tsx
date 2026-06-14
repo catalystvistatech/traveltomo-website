@@ -75,7 +75,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="inline-block border-b-2 border-red-500 pb-1 text-3xl font-bold text-white">
           Welcome back, {user.display_name ?? "there"}
         </h1>
         <p className="text-zinc-400 mt-1">
@@ -263,7 +263,6 @@ function StatCard({
   value,
   icon,
   href,
-  accent = "text-white",
 }: {
   title: string;
   value: number;
@@ -272,17 +271,13 @@ function StatCard({
   accent?: string;
 }) {
   const content = (
-    <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-zinc-400">
-          {title}
-        </CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${accent}`}>{value}</div>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl bg-gradient-to-br from-red-600 to-red-800 p-5 shadow-lg shadow-red-950/40 ring-1 ring-red-500/30 transition-transform hover:-translate-y-0.5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-white/80">{title}</p>
+        <span className="text-white/70">{icon}</span>
+      </div>
+      <div className="mt-4 text-3xl font-bold text-white">{value}</div>
+    </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
 }
