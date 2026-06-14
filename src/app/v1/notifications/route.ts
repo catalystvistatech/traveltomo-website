@@ -15,6 +15,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") ?? 50), 200));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
   const unreadOnly = url.searchParams.get("unread_only") === "true";
 
   let query = client
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     .select("id, kind, title, body, icon, deeplink, metadata, read_at, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (unreadOnly) query = query.is("read_at", null);
 

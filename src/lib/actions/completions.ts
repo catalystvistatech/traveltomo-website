@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
 
-export async function listPendingCompletions() {
+export async function listPendingCompletions(limit = 50, offset = 0) {
   const user = await getCurrentUser();
   if (!user) return [];
   const supabase = await createClient();
@@ -16,7 +16,8 @@ export async function listPendingCompletions() {
     .select(
       "id, user_id, challenge_id, verification_status, verification_code, completed_at, gps_latitude, gps_longitude, proof_url, challenges!inner(id, title, merchant_id, rewards(id, title, discount_type, discount_value))"
     )
-    .order("completed_at", { ascending: false });
+    .order("completed_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (!canViewAll) {
     query.eq("challenges.merchant_id", user.id);

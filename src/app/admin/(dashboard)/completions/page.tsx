@@ -32,11 +32,25 @@ export default function CompletionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [codeInput, setCodeInput] = useState("");
   const [pending, startTransition] = useTransition();
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const PAGE_SIZE = 50;
 
   async function reload() {
     setIsLoading(true);
-    setRows(await listPendingCompletions());
+    const first = await listPendingCompletions(PAGE_SIZE, 0);
+    setRows(first);
+    setHasMore(first.length === PAGE_SIZE);
     setIsLoading(false);
+  }
+
+  async function loadMore() {
+    setLoadingMore(true);
+    const next = await listPendingCompletions(PAGE_SIZE, rows.length);
+    setRows((prev) => [...prev, ...next]);
+    setHasMore(next.length === PAGE_SIZE);
+    setLoadingMore(false);
   }
 
   useEffect(() => {
@@ -241,6 +255,19 @@ export default function CompletionsPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            disabled={loadingMore}
+            onClick={loadMore}
+            className="border-zinc-700 text-zinc-200"
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </Button>
         </div>
       )}
     </div>
