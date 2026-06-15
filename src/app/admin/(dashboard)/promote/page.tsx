@@ -210,6 +210,13 @@ export default function PromotePage() {
             <div className="divide-y divide-zinc-800">
               {history.map((h) => {
                 const r = h as Record<string, unknown>;
+                const isExpired =
+                  new Date(r.ends_at as string).getTime() < Date.now();
+                const isLive = (r.status as string) === "active" && !isExpired;
+                const label =
+                  (r.status as string) === "active" && isExpired
+                    ? "expired"
+                    : (r.status as string);
                 return (
                   <div
                     key={r.id as string}
@@ -219,18 +226,19 @@ export default function PromotePage() {
                       {r.tier as string}
                     </span>
                     <span className="text-zinc-500">
-                      {new Date(r.starts_at as string).toLocaleDateString()} ?{" "}
+                      {new Date(r.starts_at as string).toLocaleDateString()}
+                      {" \u2013 "}
                       {new Date(r.ends_at as string).toLocaleDateString()}
                     </span>
                     <Badge
                       variant="outline"
                       className={
-                        (r.status as string) === "active"
+                        isLive
                           ? "border-green-600 text-green-400"
                           : "border-zinc-700 text-zinc-400"
                       }
                     >
-                      {r.status as string}
+                      {label}
                     </Badge>
                   </div>
                 );
