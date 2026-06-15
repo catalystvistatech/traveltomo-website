@@ -425,7 +425,9 @@ function Footer() {
           <p className="text-zinc-500 text-sm italic">
             Explore. Play. Earn. Repeat.
           </p>
-          <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          <Link href="/" aria-label="TravelTomo home" className="inline-flex">
+            <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          </Link>
 
           {/* Links */}
           <div className="flex items-center gap-6 text-sm text-zinc-500">
