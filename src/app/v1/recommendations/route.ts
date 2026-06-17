@@ -74,6 +74,12 @@ export async function GET(request: Request) {
     query = query.in("establishment_type", types);
   }
 
+  // Conflict of interest: never recommend a merchant their own challenges
+  // (they can't play them - migration 035).
+  if (auth.user) {
+    query = query.neq("merchant_id", auth.user.id);
+  }
+
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

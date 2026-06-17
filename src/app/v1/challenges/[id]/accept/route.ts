@@ -24,9 +24,23 @@ export async function POST(request: Request, { params }: Params) {
   // lookup; we always need it anyway for the insert payload.
   const { data: challengeRow } = await client
     .from("challenges")
-    .select("id, travel_challenge_id")
+    .select("id, travel_challenge_id, merchant_id")
     .eq("id", id)
     .maybeSingle();
+
+  // Conflict of interest: a merchant can't play (accept/complete) their
+  // own challenge. The DB RLS INSERT policy (migration 035) is the hard
+  // boundary; this is the friendly, early 403 so the client shows a
+  // clear message instead of a generic RLS rejection.
+  if (challengeRow?.merchant_id === user.id) {
+    return NextResponse.json(
+      {
+        error: "own_quest",
+        detail: "You can't play a quest you created.",
+      },
+      { status: 403 }
+    );
+  }
 
   let travelProgressId: string | null = null;
   if (challengeRow?.travel_challenge_id) {
