@@ -487,7 +487,7 @@ export default function TravelChallengeDetailPage({
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Template cloned ? edit the child challenge as needed");
+    toast.success("Template cloned - edit the child challenge as needed");
     await reload();
   }
 

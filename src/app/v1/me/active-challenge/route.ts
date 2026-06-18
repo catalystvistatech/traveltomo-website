@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
  * enough info for the iOS app to render a "Continue Challenge" banner
  * and reopen the Challenge Map in the right shape:
  *
- *   - `travel_challenge_id` set ? launch via `.travelChallenge`
- *   - `travel_challenge_id` null ? launch via `.singleChallenge` using
+ *   - `travel_challenge_id` set -> launch via `.travelChallenge`
+ *   - `travel_challenge_id` null -> launch via `.singleChallenge` using
  *     the included challenge coords + establishment type.
  *
  * RLS already restricts `challenge_completions` to the calling user, so

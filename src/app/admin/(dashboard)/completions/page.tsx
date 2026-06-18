@@ -50,7 +50,7 @@ export default function CompletionsPage() {
       const r = await verifyCompletion(id);
       if ("error" in r) toast.error(r.error as string);
       else {
-        toast.success("Verified ? reward released");
+        toast.success("Verified - reward released");
         await reload();
       }
     });
@@ -117,7 +117,7 @@ export default function CompletionsPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
-          Pending ? {pendingRows.length}
+          Pending · {pendingRows.length}
         </h2>
         <div className="space-y-3">
           {pendingRows.length === 0 && (

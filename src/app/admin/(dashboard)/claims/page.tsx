@@ -540,7 +540,7 @@ function formatDiscount(
     case "percentage":
       return value != null ? `${value}% off` : "Percent discount";
     case "fixed":
-      return value != null ? `?${value} off` : "Fixed discount";
+      return value != null ? `₱${value} off` : "Fixed discount";
     case "freebie":
       return "Freebie";
     default:
