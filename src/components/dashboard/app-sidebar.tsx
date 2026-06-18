@@ -46,6 +46,13 @@ export function AppSidebar({ user }: { user: UserProfile }) {
   const [query, setQuery] = useState("");
 
   const isStaff = user.role === "admin" || user.role === "superadmin";
+  const roleLabel =
+    user.role === "superadmin"
+      ? "Superadmin"
+      : user.role === "admin"
+        ? "Admin"
+        : "Merchant";
+  const portalLabel = `${roleLabel} Portal`;
 
   const groups: NavGroup[] = [
     {
@@ -113,25 +120,29 @@ export function AppSidebar({ user }: { user: UserProfile }) {
   return (
     <Sidebar className="border-zinc-800 bg-black">
       <SidebarHeader className="gap-3 border-b border-zinc-800/60 p-4">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <Link href="/admin" className="block">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="TravelTomo" className="h-7 w-auto" />
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              Merchant Portal
+            <img src="/logo.svg" alt="TravelTomo" className="h-10 w-auto" />
+            <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              {portalLabel}
             </p>
           </Link>
           <Link
             href="/admin/rewards"
             title="Create rewards"
-            className="relative shrink-0 text-red-400 hover:text-red-300"
+            className="shrink-0 text-red-400 hover:text-red-300"
           >
-            <Gift className="h-5 w-5" />
-            <span className="pointer-events-none absolute right-0 top-7 w-28 rounded-lg border border-dashed border-red-500/40 bg-red-500/5 px-2 py-1 text-center text-[9px] leading-tight text-red-300">
-              Click me to create rewards!
-            </span>
+            <Gift className="h-6 w-6" />
           </Link>
         </div>
+
+        <Link
+          href="/admin/rewards"
+          className="block rounded-lg border border-dashed border-red-500/40 bg-red-500/5 px-3 py-1.5 text-center text-[11px] leading-tight text-red-300 hover:bg-red-500/10"
+        >
+          Click me to create rewards!
+        </Link>
 
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -199,15 +210,18 @@ export function AppSidebar({ user }: { user: UserProfile }) {
             <span>Log out</span>
           </button>
         </nav>
-        <div className="mt-2 flex items-center gap-2 rounded-lg bg-zinc-900/60 px-3 py-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-700 text-xs font-bold text-white">
+        <div className="mt-2 flex items-center gap-3 rounded-xl bg-zinc-900/60 px-3 py-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-base font-bold text-white">
             {(user.display_name ?? user.email)?.[0]?.toUpperCase() ?? "?"}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-white">
-              {user.display_name ?? "Merchant"}
+            <p className="truncate text-sm font-semibold text-white">
+              {user.display_name ?? roleLabel}
             </p>
-            <p className="truncate text-[10px] text-zinc-500">{user.email}</p>
+            <p className="truncate text-[11px] text-zinc-500">{user.email}</p>
+            <span className="mt-1 inline-block rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300">
+              {roleLabel}
+            </span>
           </div>
         </div>
       </SidebarFooter>
