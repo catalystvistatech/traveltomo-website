@@ -615,12 +615,12 @@ export default function TravelChallengeDetailPage({
       {showEdit && (
         <Card className="bg-zinc-900 border-zinc-700">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-white text-base">Edit Quest</CardTitle>
-            <button type="button" onClick={() => setShowEdit(false)} className="text-zinc-500 hover:text-white">
-              <X className="h-4 w-4" />
+            <CardTitle className="text-white text-lg">Edit Quest</CardTitle>
+            <button type="button" onClick={() => setShowEdit(false)} aria-label="Close" className="text-zinc-500 hover:text-white">
+              <X className="h-5 w-5" />
             </button>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             {businesses.length > 1 && (
               <div className="space-y-2">
                 <Label className="text-zinc-300">Business</Label>
@@ -628,7 +628,7 @@ export default function TravelChallengeDetailPage({
                   value={editForm.business_id}
                   onValueChange={(v) => { if (v) setEditForm({ ...editForm, business_id: v }); }}
                 >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
                     <span className="truncate">
                       {businesses.find((b) => b.id === editForm.business_id)?.name ?? "Select a business"}
                     </span>
@@ -649,12 +649,15 @@ export default function TravelChallengeDetailPage({
               <div className="space-y-2">
                 <Label className="text-zinc-300">Completion Mode</Label>
                 <Select value={editForm.completion_mode} onValueChange={(v: string | null) => v && setEditForm({ ...editForm, completion_mode: v as "any" | "all" })}>
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="any">Any — complete 1</SelectItem>
                     <SelectItem value="all">All — complete every stop</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-zinc-500">
+                  &ldquo;Any&rdquo; lets travelers finish one stop. &ldquo;All&rdquo; requires every stop and unlocks the Big Reward below.
+                </p>
               </div>
             </div>
             <div className="space-y-2">
@@ -707,20 +710,28 @@ export default function TravelChallengeDetailPage({
               )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Start Date</Label>
-                <Input type="date" value={editForm.date_range_start} onChange={(e) => setEditForm({ ...editForm, date_range_start: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+            <div className="space-y-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Start Date</Label>
+                  <Input type="date" value={editForm.date_range_start} onChange={(e) => setEditForm({ ...editForm, date_range_start: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">End Date</Label>
+                  <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">End Date</Label>
-                <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
-              </div>
+              <p className="text-xs text-zinc-500">
+                When the quest is playable. Leave both blank to keep it always on.
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label className="text-zinc-300">Max Completions</Label>
               <Input type="number" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} placeholder="Unlimited" className="bg-zinc-800 border-zinc-700 text-white" />
+              <p className="text-xs text-zinc-500">
+                Total number of travelers who can claim this quest. Leave blank for unlimited.
+              </p>
             </div>
 
             <div className="pt-3 border-t border-zinc-800 space-y-3">
@@ -782,7 +793,7 @@ export default function TravelChallengeDetailPage({
                         });
                       }}
                     >
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                      <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
                         <SelectValue placeholder="Pick a reward" />
                       </SelectTrigger>
                       <SelectContent>
@@ -826,7 +837,7 @@ export default function TravelChallengeDetailPage({
                           })
                         }
                       >
-                        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                        <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
                           <SelectValue placeholder="(none)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -865,7 +876,7 @@ export default function TravelChallengeDetailPage({
                       className="bg-zinc-800 border-zinc-700 text-white"
                     />
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  <label className="flex items-center gap-2.5 text-sm text-zinc-300 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={editForm.big_reward_save_to_library}
@@ -875,7 +886,7 @@ export default function TravelChallengeDetailPage({
                           big_reward_save_to_library: e.target.checked,
                         })
                       }
-                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-red-600 focus:ring-red-600"
+                      className="h-5 w-5 rounded border-zinc-700 bg-zinc-800 text-red-600 focus:ring-red-600"
                     />
                     Also save this reward to my Rewards library for reuse
                   </label>
@@ -883,11 +894,11 @@ export default function TravelChallengeDetailPage({
               )}
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleSaveEdit} disabled={editSaving} className="bg-red-600 hover:bg-red-700 text-white">
+            <div className="flex gap-2 pt-3 border-t border-zinc-800">
+              <Button onClick={handleSaveEdit} disabled={editSaving} className="h-11 px-6 text-base bg-red-600 hover:bg-red-700 text-white mt-3">
                 {editSaving ? "Saving..." : "Save Changes"}
               </Button>
-              <Button variant="ghost" onClick={() => { setShowEdit(false); setEditCoverPreview(null); }} className="text-zinc-400">Cancel</Button>
+              <Button variant="ghost" onClick={() => { setShowEdit(false); setEditCoverPreview(null); }} className="h-11 px-5 text-base text-zinc-400 mt-3">Cancel</Button>
             </div>
           </CardContent>
         </Card>
