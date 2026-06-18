@@ -434,9 +434,18 @@ export async function upsertBusinessAsAdmin(
       .eq("id", businessId);
     if (error) return { error: { _form: [error.message] } };
   } else {
-    const { error } = await admin
-      .from("businesses")
-      .insert({ ...payload, verification_status: formData.verification_status ?? "unsubmitted" });
+    // A superadmin creating a business needs no verification — default it to
+    // approved (with audit fields) unless an explicit status was passed.
+    const status = formData.verification_status ?? "approved";
+    const insertPayload: Record<string, unknown> = {
+      ...payload,
+      verification_status: status,
+    };
+    if (status === "approved") {
+      insertPayload.verified_at = now;
+      insertPayload.verified_by = user.id;
+    }
+    const { error } = await admin.from("businesses").insert(insertPayload);
     if (error) return { error: { _form: [error.message] } };
   }
 

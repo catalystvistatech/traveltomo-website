@@ -5,12 +5,9 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import { subscriptionSchema } from "@/lib/validations/marketplace";
 import { createInvoice, isMockMode } from "@/lib/payments/xendit";
 import { revalidatePath } from "next/cache";
+import { PROMOTION_TIER_PRICES_CENTS } from "@/lib/constants/promotion-tiers";
 
-const TIER_PRICES_CENTS: Record<"basic" | "featured" | "premium", number> = {
-  basic: 9900,
-  featured: 29900,
-  premium: 79900,
-};
+const TIER_PRICES_CENTS = PROMOTION_TIER_PRICES_CENTS;
 
 export async function getActiveSubscription() {
   const user = await getCurrentUser();

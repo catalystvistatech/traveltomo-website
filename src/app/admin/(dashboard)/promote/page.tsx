@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Crown, Star } from "lucide-react";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { formatTierPriceMonthly } from "@/lib/constants/promotion-tiers";
 
 type Sub = Awaited<ReturnType<typeof getActiveSubscription>>;
 type Row = Awaited<ReturnType<typeof listSubscriptionHistory>>[number];
@@ -33,7 +34,7 @@ const TIERS: {
   {
     key: "basic",
     title: "Basic",
-    price: "?99 / mo",
+    price: formatTierPriceMonthly("basic"),
     icon: <Sparkles className="h-5 w-5" />,
     perks: [
       "Stay visible in recommendations",
@@ -44,7 +45,7 @@ const TIERS: {
   {
     key: "featured",
     title: "Featured",
-    price: "?299 / mo",
+    price: formatTierPriceMonthly("featured"),
     icon: <Star className="h-5 w-5" />,
     perks: [
       "Boosted position in the dice pool",
@@ -55,7 +56,7 @@ const TIERS: {
   {
     key: "premium",
     title: "Premium",
-    price: "?799 / mo",
+    price: formatTierPriceMonthly("premium"),
     icon: <Crown className="h-5 w-5" />,
     perks: [
       "Top-of-list placement",
