@@ -20,7 +20,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * FK (`challenges.merchant_id -> profiles.id`, same for businesses), so
  * we resolve in a few small flat queries instead.
  */
-const PROXIMITY_METERS = 300;
+// "In that area near" is an area-level hint on the Home cards, not a
+// pinpoint check, so we use a generous neighbourhood radius (~2.5 km)
+// rather than an at-the-spot one. The arrival/check-in flow keeps its own
+// tight per-stop radius elsewhere.
+const PROXIMITY_METERS = 2500;
 
 function distanceMeters(
   aLat: number,
