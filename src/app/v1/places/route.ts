@@ -111,9 +111,11 @@ export async function GET(request: Request) {
           },
           {
             headers: {
-              "Cache-Control":
-                "public, s-maxage=30, stale-while-revalidate=30",
-              Vary: "Authorization",
+              // Private + no shared (CDN) caching: the live-challenge flag must
+              // be fresh per request. A shared cache with stale-while-revalidate
+              // raced a stale `false` onto the first fetch after a challenge
+              // went live. The client still caches briefly for re-opens.
+              "Cache-Control": "private, max-age=30, must-revalidate",
             },
           },
         );
@@ -161,9 +163,7 @@ export async function GET(request: Request) {
         },
         {
           headers: {
-            "Cache-Control":
-              "public, s-maxage=30, stale-while-revalidate=30",
-            Vary: "Authorization",
+            "Cache-Control": "private, max-age=30, must-revalidate",
           },
         },
       );
