@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Annotates a page of place rows with a boolean indicating whether the
@@ -49,8 +49,15 @@ export async function annotateHasLiveChallenges<
     latitude?: number | null;
     longitude?: number | null;
   }
->(client: SupabaseClient, places: T[]): Promise<(T & { has_live_challenges: boolean })[]> {
+>(places: T[]): Promise<(T & { has_live_challenges: boolean })[]> {
   if (places.length === 0) return [];
+
+  // Live-challenge proximity is non-sensitive, area-level info that must be
+  // identical for every viewer (and must work for Bearer-token API callers
+  // like the iOS app, whose cookie-less server client reads as `anon` and is
+  // blocked by the authenticated-only "read live challenges" RLS policy).
+  // Use the service-role client so the flag is computed regardless of caller.
+  const client = createAdminClient();
 
   const placeIds = Array.from(
     new Set(

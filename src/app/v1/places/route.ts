@@ -97,8 +97,7 @@ export async function GET(request: Request) {
           mode === "trending" ? sortByTrending(cached) : sortByDistance(cached, lat, lng);
         const rawPage = sorted.slice(offset, offset + limit);
         const hasMore = offset + limit < sorted.length;
-        const cacheClient = await createClient();
-        const page = await annotateHasLiveChallenges(cacheClient, rawPage);
+        const page = await annotateHasLiveChallenges(rawPage);
 
         return NextResponse.json(
           {
@@ -149,8 +148,7 @@ export async function GET(request: Request) {
 
       const rawPage = sorted.slice(offset, offset + limit);
       const hasMore = offset + limit < sorted.length;
-      const liveClient = await createClient();
-      const page = await annotateHasLiveChallenges(liveClient, rawPage);
+      const page = await annotateHasLiveChallenges(rawPage);
 
       return NextResponse.json(
         {
@@ -202,7 +200,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const dbPage = await annotateHasLiveChallenges(supabase, data ?? []);
+  const dbPage = await annotateHasLiveChallenges(data ?? []);
 
   return NextResponse.json({
     data: dbPage,
