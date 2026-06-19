@@ -112,7 +112,7 @@ export async function GET(request: Request) {
           {
             headers: {
               "Cache-Control":
-                "public, s-maxage=120, stale-while-revalidate=3600",
+                "public, s-maxage=30, stale-while-revalidate=30",
               Vary: "Authorization",
             },
           },
@@ -162,7 +162,7 @@ export async function GET(request: Request) {
         {
           headers: {
             "Cache-Control":
-              "public, s-maxage=120, stale-while-revalidate=3600",
+              "public, s-maxage=30, stale-while-revalidate=30",
             Vary: "Authorization",
           },
         },
