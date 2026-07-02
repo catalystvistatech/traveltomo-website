@@ -55,12 +55,14 @@ function Nav() {
             Dashboard
           </Link>
         </div>
-        <Button
-          className="text-sm rounded-full px-5 text-white"
-          style={{ backgroundColor: RED }}
-        >
-          Download App
-        </Button>
+        <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+          <Button
+            className="text-sm rounded-full px-5 text-white"
+            style={{ backgroundColor: RED }}
+          >
+            Download App
+          </Button>
+        </a>
       </div>
     </nav>
   );
@@ -104,14 +106,16 @@ function Hero() {
             </p>
 
             <div className="flex items-center gap-4">
-              <Button
-                size="lg"
-                className="text-sm font-semibold rounded-full px-6 h-11 text-white"
-                style={{ backgroundColor: RED }}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Download for iOS
-              </Button>
+              <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+                <Button
+                  size="lg"
+                  className="text-sm font-semibold rounded-full px-6 h-11 text-white"
+                  style={{ backgroundColor: RED }}
+                >
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  Download for iOS
+                </Button>
+              </a>
               <span className="text-sm text-zinc-500">Available on Android Soon</span>
             </div>
           </div>
@@ -390,14 +394,16 @@ function CTA() {
           Currently available in Angeles City, Pampanga.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button
-            size="lg"
-            className="text-sm font-semibold rounded-full px-8 h-12 text-white"
-            style={{ backgroundColor: RED }}
-          >
-            <Smartphone className="h-4 w-4 mr-2" />
-            Download on iOS
-          </Button>
+          <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              className="text-sm font-semibold rounded-full px-8 h-12 text-white"
+              style={{ backgroundColor: RED }}
+            >
+              <Smartphone className="h-4 w-4 mr-2" />
+              Download on iOS
+            </Button>
+          </a>
           <Link href="/admin/register">
             <Button
               size="lg"
