@@ -3,6 +3,7 @@ import { createApiClient, requireUser } from "@/lib/supabase/api";
 import {
   buildTravelProgressPayload,
   derivePlayerStopStatus,
+  globalSkipStatus,
   loadActiveTravelProgress,
   loadStopCompletionsForTravelChallenge,
 } from "@/lib/challenge-progress";
@@ -182,6 +183,25 @@ export async function GET(request: Request, { params }: Params) {
     })
     .filter((c) => c.latitude != null && c.longitude != null);
 
+  // Skips are one GLOBAL 3h-recharging pool (not per-quest), so the
+  // progress payload reports the pool state — this is what seeds the
+  // map's "skips left" pill.
+  let progressPayload = auth.user
+    ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
+    : null;
+  if (auth.user && progressPayload) {
+    try {
+      const pool = await globalSkipStatus(auth.client, auth.user.id);
+      progressPayload = {
+        ...progressPayload,
+        skips_used: pool.skips_used,
+        skips_limit: pool.skips_limit,
+      };
+    } catch {
+      // Pool lookup is display-only; keep the payload on failure.
+    }
+  }
+
   return NextResponse.json({
     data: {
       id: row.id,
@@ -200,9 +220,7 @@ export async function GET(request: Request, { params }: Params) {
       business_latitude: businessLat,
       business_longitude: businessLng,
       establishment_type: row.business?.establishment_type ?? null,
-      progress: auth.user
-        ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
-        : null,
+      progress: progressPayload,
       children,
     },
   }, {

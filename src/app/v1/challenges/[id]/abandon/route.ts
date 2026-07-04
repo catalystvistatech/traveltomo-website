@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { consumeGlobalSkip } from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -77,36 +78,23 @@ export async function POST(request: Request, { params }: Params) {
     skips_limit: 3,
   };
 
-  // Consume a quest skip token when this challenge belongs to a travel
-  // challenge set so the budget tracks abandonments alongside re-rolls.
-  if (challenge?.travel_challenge_id && completion.travel_challenge_progress_id) {
-    const { data: rpcResult, error: rpcError } = await client.rpc(
-      "consume_quest_skip",
-      {
-        p_user: user.id,
-        p_progress_id: completion.travel_challenge_progress_id,
-      }
-    );
-    if (rpcError) {
+  // Abandoning a quest stop costs one skip from the user's GLOBAL pool
+  // (3 skips / 3h refill, shared across all quests; unlimited for
+  // subscribers). Non-quest challenges stay free to abandon.
+  if (challenge?.travel_challenge_id) {
+    try {
+      skipResult = await consumeGlobalSkip(client, user.id);
+    } catch (e) {
       // The completion is already skipped; surface the token error
       // without rolling back so the user still gets unstuck.
       return NextResponse.json(
         {
-          error: rpcError.message,
+          error: e instanceof Error ? e.message : "skip consume failed",
           partial_success: true,
           completion_id: completion.id,
         },
         { status: 500 }
       );
-    }
-    if (rpcResult && typeof rpcResult === "object") {
-      const r = rpcResult as Record<string, unknown>;
-      skipResult = {
-        consumed: r.consumed === true,
-        requires_ad: r.requires_ad === true,
-        skips_used: typeof r.skips_used === "number" ? r.skips_used : 0,
-        skips_limit: typeof r.skips_limit === "number" ? r.skips_limit : 3,
-      };
     }
   }
 
