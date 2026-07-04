@@ -43,14 +43,24 @@ export async function GET(request: Request, { params }: Params) {
     .single();
 
   if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.code === "PGRST116" ? 404 : 500 }
-    );
+    // PGRST116 = zero rows from .single(): the quest doesn't exist or is no
+    // longer visible under RLS (expired / paused / deleted). Surface a human
+    // message — the raw "Cannot coerce the result to a single JSON object"
+    // leaked straight into the iOS error alert.
+    if (error.code === "PGRST116") {
+      return NextResponse.json(
+        { error: "This quest is no longer available." },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "This quest is no longer available." },
+      { status: 404 }
+    );
   }
 
   type ChildRow = {

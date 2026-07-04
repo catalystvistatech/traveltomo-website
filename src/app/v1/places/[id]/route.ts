@@ -142,7 +142,30 @@ export async function GET(request: Request, { params }: Params) {
   for (const row of (byPlace.data ?? []) as ChallengeRow[]) {
     byId.set(row.id, hydrate(row));
   }
-  const challenges = Array.from(byId.values());
+  let challenges = Array.from(byId.values());
+
+  // Drop stops whose parent quest is no longer readable (expired / paused /
+  // deleted). Child stops stay 'live' when a quest dies (they revive if the
+  // quest is renewed), but tapping one would 404 on the quest-detail route —
+  // the RLS policy only exposes live quests, so whatever this (caller-scoped)
+  // query returns is exactly the playable set.
+  const questIds = Array.from(
+    new Set(
+      challenges
+        .map((c) => c.travel_challenge_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  );
+  if (questIds.length > 0) {
+    const { data: liveQuests } = await supabase
+      .from("travel_challenges")
+      .select("id")
+      .in("id", questIds);
+    const liveIds = new Set((liveQuests ?? []).map((q) => q.id as string));
+    challenges = challenges.filter(
+      (c) => !c.travel_challenge_id || liveIds.has(c.travel_challenge_id),
+    );
+  }
 
   return NextResponse.json({
     data: {
