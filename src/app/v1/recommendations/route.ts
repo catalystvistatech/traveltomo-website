@@ -21,6 +21,12 @@ export async function GET(request: Request) {
     .map((t) => t.trim())
     .filter(Boolean);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+  // include_done=true keeps the caller's claimed / in-flight stops in the
+  // response (annotated with player_status) instead of dropping them.
+  // Used by the place page so "Challenges at <place>" can show a stop you
+  // already claimed as claimed rather than pretending the place is empty.
+  // The dice-roll flow keeps the default (exclusions applied).
+  const includeDone = searchParams.get("include_done") === "true";
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json(
@@ -155,12 +161,21 @@ export async function GET(request: Request) {
       }
     }
 
-    pool = inRange.filter((r) => {
-      const status = derivePlayerStopStatus(
+    // Annotate every row with the caller's stop status so clients can
+    // render claimed / in-progress states, then (unless include_done)
+    // drop finished and in-flight stops from the rollable pool.
+    const annotated = inRange.map((r) => ({
+      ...r,
+      player_status: derivePlayerStopStatus(
         completionByChallenge.get(r.id as string) ?? null
-      );
-      return !isChallengeExcludedFromNearbyPool(status);
-    });
+      ),
+    }));
+
+    pool = includeDone
+      ? annotated
+      : annotated.filter(
+          (r) => !isChallengeExcludedFromNearbyPool(r.player_status)
+        );
   }
 
   return NextResponse.json({
