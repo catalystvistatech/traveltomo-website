@@ -8,6 +8,7 @@ import {
 } from "@/lib/google/places";
 import {
   DEFAULT_CACHE_TTL_HOURS,
+  hydrateMissingPlacePhotos,
   lookupCachedPlaces,
   mirrorPlaces,
 } from "@/lib/google/placesCache";
@@ -95,7 +96,9 @@ export async function GET(request: Request) {
       if (cached.length > 0) {
         const sorted: NormalizedPlace[] =
           mode === "trending" ? sortByTrending(cached) : sortByDistance(cached, lat, lng);
-        const rawPage = sorted.slice(offset, offset + limit);
+        const rawPage = await hydrateMissingPlacePhotos(
+          sorted.slice(offset, offset + limit)
+        );
         const hasMore = offset + limit < sorted.length;
         const page = await annotateHasLiveChallenges(rawPage);
 
@@ -200,7 +203,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const dbPage = await annotateHasLiveChallenges(data ?? []);
+  const dbRows = await hydrateMissingPlacePhotos(
+    (data ?? []) as { id: string; image_url: string | null; google_place_id: string | null }[]
+  );
+  const dbPage = await annotateHasLiveChallenges(dbRows);
 
   return NextResponse.json({
     data: dbPage,

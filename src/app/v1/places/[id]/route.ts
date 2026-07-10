@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createApiClient } from "@/lib/supabase/api";
+import { hydrateMissingPlacePhotos } from "@/lib/google/placesCache";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +35,17 @@ export async function GET(request: Request, { params }: Params) {
     .eq(isUuid ? "id" : "google_place_id", id)
     .maybeSingle();
 
-  const { data: place, error: placeErr } = await placeQuery;
+  const { data: rawPlace, error: placeErr } = await placeQuery;
   if (placeErr) {
     return NextResponse.json({ error: placeErr.message }, { status: 500 });
   }
-  if (!place) {
+  if (!rawPlace) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+
+  // Business-mirrored rows come in photo-less; pull the hero image from
+  // the venue's Google Business listing on first view.
+  const [place] = await hydrateMissingPlacePhotos([rawPlace]);
 
   type ChallengeRow = {
     id: string;
