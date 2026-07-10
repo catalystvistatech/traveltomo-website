@@ -2,7 +2,7 @@
 --
 -- Honor the traveler Unlimited pass ("Skip freely. Play without limits.")
 -- in the skip-budget functions. Subscribers (profiles.is_unlimited, now set
--- by the StoreKit entitlement sync at /v1/me/entitlement — previously only
+-- by the StoreKit entitlement sync at /v1/me/entitlement ï¿½ previously only
 -- by the Stripe webhook) skip without consuming any budget:
 --
 --   1. consume_quest_skip: returns consumed=true / requires_ad=false without
