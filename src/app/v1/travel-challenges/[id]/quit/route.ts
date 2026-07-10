@@ -8,8 +8,8 @@ type Params = { params: Promise<{ id: string }> };
  * POST /v1/travel-challenges/:id/quit
  *
  * Ends the caller's active session for a quest ("Quit Anyway" on the
- * Home ongoing-quest card). The session flips to `abandoned` — giving up
- * the big reward — and any in-flight stop is forfeited so it returns to
+ * Home ongoing-quest card). The session flips to `abandoned` â€” giving up
+ * the big reward â€” and any in-flight stop is forfeited so it returns to
  * the rollable pool if the traveler ever restarts the quest. Claimed
  * stops (and their XP) are untouched.
  */
