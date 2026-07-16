@@ -56,8 +56,42 @@ export function planForPriceId(priceId: string | null | undefined): PlanCode | n
   return null;
 }
 
+/**
+ * Signing secrets to try when verifying an incoming webhook. A single URL
+ * can be registered in BOTH Stripe test mode and live mode, and each mode
+ * signs with its OWN secret — so we accept a list and try each. Supports:
+ *   - STRIPE_WEBHOOK_SECRET       (primary; may be comma-separated)
+ *   - STRIPE_WEBHOOK_SECRET_TEST  (optional dedicated test-mode secret)
+ * This is what stops the "we've had trouble sending requests in test mode"
+ * failure emails when prod holds only the live secret.
+ */
+function webhookSecrets(): string[] {
+  const raw = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_WEBHOOK_SECRET_TEST,
+  ]
+    .filter((v): v is string => Boolean(v))
+    .flatMap((v) => v.split(","))
+    .map((v) => v.trim())
+    .filter(Boolean);
+  // De-dupe so a repeated secret isn't tried twice.
+  return Array.from(new Set(raw));
+}
+
 export function verifyWebhook(rawBody: string, signature: string): Stripe.Event {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET is not set.");
-  return getStripe().webhooks.constructEvent(rawBody, signature, secret);
+  const secrets = webhookSecrets();
+  if (secrets.length === 0) throw new Error("STRIPE_WEBHOOK_SECRET is not set.");
+
+  const stripe = getStripe();
+  let lastError: unknown;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Webhook signature verification failed for all configured secrets.");
 }
