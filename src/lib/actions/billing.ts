@@ -32,37 +32,42 @@ export async function startPlanCheckout(plan: PlanCode) {
   const stripe = getStripe();
   const admin = createAdminClient();
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("stripe_customer_id, display_name")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  let customerId = profile?.stripe_customer_id as string | null | undefined;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email || undefined,
-      name: (profile?.display_name as string | null) || undefined,
-      metadata: { merchant_id: user.id },
-    });
-    customerId = customer.id;
-    await admin
+  try {
+    const { data: profile } = await admin
       .from("profiles")
-      .update({ stripe_customer_id: customerId })
-      .eq("id", user.id);
+      .select("stripe_customer_id, display_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let customerId = profile?.stripe_customer_id as string | null | undefined;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email || undefined,
+        name: (profile?.display_name as string | null) || undefined,
+        metadata: { merchant_id: user.id },
+      });
+      customerId = customer.id;
+      await admin
+        .from("profiles")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", user.id);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${SITE_URL}/admin/billing?status=success`,
+      cancel_url: `${SITE_URL}/admin/billing?status=cancelled`,
+      metadata: { merchant_id: user.id, plan_code: plan },
+      subscription_data: { metadata: { merchant_id: user.id, plan_code: plan } },
+    });
+
+    return { url: session.url };
+  } catch (e) {
+    console.error("startPlanCheckout failed", e);
+    return { error: "Couldn't start checkout. Please try again." };
   }
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${SITE_URL}/admin/billing?status=success`,
-    cancel_url: `${SITE_URL}/admin/billing?status=cancelled`,
-    metadata: { merchant_id: user.id, plan_code: plan },
-    subscription_data: { metadata: { merchant_id: user.id, plan_code: plan } },
-  });
-
-  return { url: session.url };
 }
 
 /**
@@ -86,10 +91,14 @@ export async function manageBilling() {
   const customerId = profile?.stripe_customer_id as string | null | undefined;
   if (!customerId) return { error: "No billing account yet. Choose a plan first." };
 
-  const session = await getStripe().billingPortal.sessions.create({
-    customer: customerId,
-    return_url: `${SITE_URL}/admin/billing`,
-  });
-
-  return { url: session.url };
+  try {
+    const session = await getStripe().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${SITE_URL}/admin/billing`,
+    });
+    return { url: session.url };
+  } catch (e) {
+    console.error("manageBilling failed", e);
+    return { error: "Couldn't open billing. Please try again." };
+  }
 }

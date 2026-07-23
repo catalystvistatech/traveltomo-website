@@ -25,24 +25,42 @@ export function BillingView({
 
   async function upgrade(plan: PlanCode) {
     setBusy(plan);
-    const res = await startPlanCheckout(plan);
-    setBusy(null);
-    if ("error" in res && res.error) {
-      toast.error(res.error);
-      return;
+    try {
+      const res = await startPlanCheckout(plan);
+      if ("error" in res && res.error) {
+        toast.error(res.error);
+        return;
+      }
+      if ("url" in res && res.url) {
+        window.location.href = res.url;
+        return; // keep the spinner while the browser navigates to Stripe
+      }
+      toast.error("Couldn't start checkout. Please try again.");
+    } catch {
+      toast.error("Couldn't start checkout. Please try again.");
+    } finally {
+      setBusy(null);
     }
-    if ("url" in res && res.url) window.location.href = res.url;
   }
 
   async function manage() {
     setBusy("manage");
-    const res = await manageBilling();
-    setBusy(null);
-    if ("error" in res && res.error) {
-      toast.error(res.error);
-      return;
+    try {
+      const res = await manageBilling();
+      if ("error" in res && res.error) {
+        toast.error(res.error);
+        return;
+      }
+      if ("url" in res && res.url) {
+        window.location.href = res.url;
+        return;
+      }
+      toast.error("Couldn't open billing. Please try again.");
+    } catch {
+      toast.error("Couldn't open billing. Please try again.");
+    } finally {
+      setBusy(null);
     }
-    if ("url" in res && res.url) window.location.href = res.url;
   }
 
   const limitLabel = businessLimit === null ? "Unlimited" : `${used} / ${businessLimit}`;

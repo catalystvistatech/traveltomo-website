@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavLogo } from "@/components/landing/nav-logo";
 
 const RED = "#D12D34";
 const SALMON = "#FCA581";
@@ -38,9 +39,7 @@ function Nav() {
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.svg" alt="TravelTomo" width={120} height={32} className="h-8 w-auto" />
-        </Link>
+        <NavLogo />
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <a href="#how-it-works" className="hover:text-white transition-colors">
             How It Works

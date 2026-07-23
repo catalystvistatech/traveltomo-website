@@ -171,6 +171,7 @@ export async function GET(request: Request, { params }: Params) {
         duration_minutes: c.duration_minutes,
         latitude: lat,
         longitude: lng,
+        place_id: c.place?.id ?? null,
         place_name: c.place?.name ?? row.business?.name ?? c.title,
         place_image_url: c.place?.image_url ?? null,
         reward_title: reward?.title ?? null,
