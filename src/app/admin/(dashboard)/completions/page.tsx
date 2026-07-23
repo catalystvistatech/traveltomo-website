@@ -77,7 +77,7 @@ export default function CompletionsPage() {
       const r = await rejectCompletion(id, reason);
       if ("error" in r) toast.error(r.error as string);
       else {
-        toast.success("Rejected");
+        toast.error("Rejected");
         await reload();
       }
     });
