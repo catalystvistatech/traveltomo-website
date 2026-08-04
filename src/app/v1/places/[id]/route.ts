@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: Params) {
   const placeQuery = supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, category, image_url, city, rating, user_ratings_total, google_place_id",
+      "id, name, description, latitude, longitude, category, image_url, city, rating, user_ratings_total, google_place_id, business_id",
     )
     .eq(isUuid ? "id" : "google_place_id", id)
     .maybeSingle();
@@ -81,17 +81,39 @@ export async function GET(request: Request, { params }: Params) {
     google_place_id: string | null;
   };
 
-  let matchingBusinesses: BusinessRow[] = [];
-  if (place.google_place_id) {
-    const { data: bizRows, error: bizErr } = await supabase
-      .from("businesses")
-      .select("id, merchant_id, name, google_place_id")
-      .eq("google_place_id", place.google_place_id);
-    if (bizErr) {
-      return NextResponse.json({ error: bizErr.message }, { status: 500 });
-    }
-    matchingBusinesses = (bizRows ?? []) as BusinessRow[];
+  //    A place can reach its business two ways: the Google id match above,
+  //    OR `places.business_id` when the row was mirrored from a merchant
+  //    business (migration 047). Merchant-created businesses often have no
+  //    `google_place_id` at all, so the id match alone left their places
+  //    with zero challenges — the detail screen opened empty.
+  //    Two separate `.eq()` queries rather than one `.or()`: PostgREST's
+  //    `or=` takes a filter STRING, so interpolating `google_place_id`
+  //    (merchant-writable text) into it would let a crafted value inject
+  //    extra predicates. `.eq()` passes the value as a bound parameter.
+  const bizSelect = "id, merchant_id, name, google_place_id";
+  const [byGoogleId, byBusinessId] = await Promise.all([
+    place.google_place_id
+      ? supabase.from("businesses").select(bizSelect).eq("google_place_id", place.google_place_id)
+      : Promise.resolve({ data: [] as BusinessRow[], error: null }),
+    place.business_id
+      ? supabase.from("businesses").select(bizSelect).eq("id", place.business_id)
+      : Promise.resolve({ data: [] as BusinessRow[], error: null }),
+  ]);
+
+  const bizErr = byGoogleId.error ?? byBusinessId.error;
+  if (bizErr) {
+    return NextResponse.json({ error: bizErr.message }, { status: 500 });
   }
+
+  const seenBusinessIds = new Set<string>();
+  const matchingBusinesses = [
+    ...((byGoogleId.data ?? []) as BusinessRow[]),
+    ...((byBusinessId.data ?? []) as BusinessRow[]),
+  ].filter((b) => {
+    if (seenBusinessIds.has(b.id)) return false;
+    seenBusinessIds.add(b.id);
+    return true;
+  });
 
   const merchantIds = Array.from(
     new Set(matchingBusinesses.map((b) => b.merchant_id))
