@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  MIN_SERVICE_RADIUS_M,
+  MAX_SERVICE_RADIUS_M,
+  DEFAULT_SERVICE_RADIUS_M,
+} from "@/lib/constants/service-radius";
 
 export const ESTABLISHMENT_TYPES = [
   "restaurant",
@@ -89,7 +94,16 @@ export const extendedBusinessSchema = z.object({
   establishment_type: z.enum(ESTABLISHMENT_TYPES, { message: "Please select a business type" }),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
-  service_radius_meters: z.coerce.number().int().min(100, "Radius must be at least 100m").max(20000, "Radius cannot exceed 20km").default(2000),
+  // Floor is 500m, not 100m: a radius that small makes a merchant invisible
+  // (nobody comes within 100m of a venue by chance) with nothing telling them
+  // their own setting is the cause. Kept in sync with the read-time clamp in
+  // `@/lib/constants/service-radius`.
+  service_radius_meters: z.coerce
+    .number()
+    .int()
+    .min(MIN_SERVICE_RADIUS_M, `Radius must be at least ${MIN_SERVICE_RADIUS_M}m`)
+    .max(MAX_SERVICE_RADIUS_M, "Radius cannot exceed 20km")
+    .default(DEFAULT_SERVICE_RADIUS_M),
   timezone: z.string().default("Asia/Manila"),
   contact_email: z.string().email("Please enter a valid email").optional().or(z.literal("")),
   contact_phone: z.string().max(30, "Phone number is too long").optional().or(z.literal("")),
