@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createApiClient, requireUser } from "@/lib/supabase/api";
+import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 import {
   derivePlayerStopStatus,
   isChallengeExcludedFromNearbyPool,
@@ -113,11 +114,11 @@ export async function GET(request: Request) {
   // Only return challenges whose business radius covers the caller.
   // Cap at 20 km so a single misconfigured radius can't reach across
   // the country.
-  const MAX_RADIUS_M = 20_000;
   const inRange = withDistance.filter((r) => {
     if (r.distance_meters == null) return false;
-    const bizRadius = r.service_radius_meters ?? 2000;
-    return r.distance_meters <= Math.min(bizRadius, MAX_RADIUS_M);
+    // Same floor/ceiling rule as /v1/travel-challenges so a merchant's reach
+    // is identical wherever their content can surface.
+    return r.distance_meters <= effectiveServiceRadius(r.service_radius_meters);
   });
 
   inRange.sort((a, b) => {

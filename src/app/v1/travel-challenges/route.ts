@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createApiClient } from "@/lib/supabase/api";
+import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 
 /**
  * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
@@ -107,8 +108,13 @@ export async function GET(request: Request) {
   const filtered = hasCoord
     ? ranked.filter((r) => {
         if (r.distance_meters == null) return false;
-        const businessRadius = r.service_radius_meters ?? 2000; // default to 2km
-        const effectiveRadius = Math.min(businessRadius, maxRadiusMeters);
+        // Floor as well as ceiling: a merchant who set an unusably small
+        // radius (prod had one at 100 m) would otherwise be invisible to
+        // everyone, with nothing in the product telling them why.
+        const effectiveRadius = effectiveServiceRadius(
+          r.service_radius_meters,
+          maxRadiusMeters
+        );
         return r.distance_meters <= effectiveRadius;
       })
     : ranked;
