@@ -24,6 +24,9 @@ const GOOGLE_SEARCH_TEXT_URL =
 const GOOGLE_PHOTO_MEDIA = (name: string) =>
   `https://places.googleapis.com/v1/${name}/media`;
 
+const GOOGLE_PLACE_DETAILS_URL = (placeId: string) =>
+  `https://places.googleapis.com/v1/places/${placeId}`;
+
 /** Types the mobile client filters by, mapped to Places API (New) types. */
 export type EstablishmentType =
   | "restaurant"
@@ -33,7 +36,8 @@ export type EstablishmentType =
   | "adventure"
   | "landmark"
   | "shopping"
-  | "entertainment";
+  | "entertainment"
+  | "animal_themed";
 
 const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   restaurant: "restaurant",
@@ -44,6 +48,7 @@ const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   landmark: "tourist_attraction",
   shopping: "shopping_mall",
   entertainment: "amusement_park",
+  animal_themed: "zoo",
 };
 
 /** Normalized place shape returned to the mobile app. Mirrors the
@@ -197,6 +202,41 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
       typeof result.userRatingCount === "number" ? result.userRatingCount : null,
     google_place_id: result.id,
   };
+}
+
+/**
+ * Fetches photo + rating enrichment for a single place by Google place id.
+ * Used to hydrate business-mirrored `places` rows (created from a merchant's
+ * own record, so they have no Google photo) with the imagery from the
+ * venue's Google Business listing. Narrow field mask keeps the call cheap;
+ * returns null when the place has no photos or the lookup fails.
+ */
+export async function googlePlaceEnrichment(placeId: string): Promise<{
+  image_url: string | null;
+  rating: number | null;
+  user_ratings_total: number | null;
+} | null> {
+  try {
+    const response = await fetch(GOOGLE_PLACE_DETAILS_URL(placeId), {
+      headers: {
+        "X-Goog-Api-Key": apiKey(),
+        "X-Goog-FieldMask": "photos,rating,userRatingCount",
+      },
+      // Photos on a listing change rarely; a day of caching matches the
+      // places table TTL.
+      next: { revalidate: 86_400 },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as GooglePlaceNew;
+    return {
+      image_url: photoURL(data.photos?.[0]?.name),
+      rating: typeof data.rating === "number" ? data.rating : null,
+      user_ratings_total:
+        typeof data.userRatingCount === "number" ? data.userRatingCount : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> };
  * POST /v1/travel-challenges/:id/start
  *
  * Ensures the caller has an active `travel_challenge_progress` row for
- * this set. Idempotent — safe to call when the user taps Start Challenge.
+ * this set. Idempotent - safe to call when the user taps Start Challenge.
  */
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;

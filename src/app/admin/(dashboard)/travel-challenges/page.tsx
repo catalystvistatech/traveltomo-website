@@ -6,8 +6,16 @@ import {
   listTravelChallenges,
   createTravelChallenge,
   deleteTravelChallenge,
+  restoreTravelChallenge,
+  purgeTravelChallenge,
+  listDeletedTravelChallenges,
+  saveQuestAsTemplate,
+  listQuestTemplates,
+  createQuestFromTemplate,
+  deleteQuestTemplate,
   uploadTravelChallengeCover,
   listMerchantBusinesses,
+  listMerchantLibraryRewards,
 } from "@/lib/actions/travelChallenges";
 import {
   Card,
@@ -28,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, ImagePlus, X, Trash2 } from "lucide-react";
+import { Plus, ImagePlus, X, Trash2, BookmarkPlus, RotateCcw } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
@@ -43,9 +51,20 @@ const STATUS_CLASS: Record<string, string> = {
   rejected: "border-red-600 text-red-400",
 };
 
+type LibraryReward = {
+  id: string;
+  title: string;
+  description: string | null;
+  discount_type: "percentage" | "fixed" | "freebie";
+  discount_value: number | null;
+};
+
 export default function TravelChallengesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [businesses, setBusinesses] = useState<{ id: string; name: string; verification_status: string }[]>([]);
+  const [libraryRewards, setLibraryRewards] = useState<LibraryReward[]>([]);
+  const [deletedRows, setDeletedRows] = useState<Record<string, unknown>[]>([]);
+  const [questTemplates, setQuestTemplates] = useState<Record<string, unknown>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,6 +79,9 @@ export default function TravelChallengesPage() {
     date_range_start: "",
     date_range_end: "",
     max_total_completions: "",
+    big_reward_source: "custom" as "library" | "custom",
+    big_reward_reward_id: "",
+    big_reward_save_to_library: false,
     big_reward_title: "",
     big_reward_description: "",
     big_reward_discount_type: "" as "" | "percentage" | "fixed" | "freebie",
@@ -68,10 +90,18 @@ export default function TravelChallengesPage() {
 
   async function reload() {
     setIsLoading(true);
-    const [tcRows, bizList] = await Promise.all([listTravelChallenges(), listMerchantBusinesses()]);
+    const [tcRows, bizList, rewards, deleted, templates] = await Promise.all([
+      listTravelChallenges(),
+      listMerchantBusinesses(),
+      listMerchantLibraryRewards(),
+      listDeletedTravelChallenges(),
+      listQuestTemplates(),
+    ]);
     setRows(tcRows);
     setBusinesses(bizList);
-    // Pre-select the first approved business
+    setLibraryRewards(rewards);
+    setDeletedRows(deleted as Record<string, unknown>[]);
+    setQuestTemplates(templates as Record<string, unknown>[]);
     if (!form.business_id) {
       const approved = bizList.find((b) => b.verification_status === "approved");
       if (approved) setForm((f) => ({ ...f, business_id: approved.id }));
@@ -110,6 +140,10 @@ export default function TravelChallengesPage() {
 
   async function handleCreate() {
     setSaving(true);
+    // When the merchant picked a library reward we only need to send
+    // the id + source; the server copies the title/description/discount
+    // out of the reward row itself. The inline fields are sent anyway
+    // as a no-op fallback so the form stays simple.
     const payload = {
       ...form,
       max_total_completions: form.max_total_completions
@@ -119,6 +153,7 @@ export default function TravelChallengesPage() {
         ? parseFloat(form.big_reward_discount_value)
         : undefined,
       big_reward_discount_type: form.big_reward_discount_type || undefined,
+      big_reward_reward_id: form.big_reward_reward_id || undefined,
     };
     const r = await createTravelChallenge(payload);
     setSaving(false);
@@ -126,17 +161,64 @@ export default function TravelChallengesPage() {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Travel challenge created");
+    toast.success("Quest created");
     setShowNew(false);
     await reload();
   }
 
   async function handleDelete(id: string, title: string) {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!confirm(`Move "${title}" to Trash? You can restore it within 30 days, and a template copy is saved.`)) return;
     const r = await deleteTravelChallenge(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Travel challenge deleted");
+      toast.success("Moved to Trash — restorable for 30 days");
+      await reload();
+    }
+  }
+
+  async function handleRestore(id: string) {
+    const r = await restoreTravelChallenge(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Restored as draft");
+      await reload();
+    }
+  }
+
+  async function handlePurge(id: string, title: string) {
+    if (!confirm(`Permanently delete "${title}"? This cannot be undone.`)) return;
+    const r = await purgeTravelChallenge(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Permanently deleted");
+      await reload();
+    }
+  }
+
+  async function handleSaveTemplate(id: string) {
+    const r = await saveQuestAsTemplate(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Saved to your quest templates");
+      await reload();
+    }
+  }
+
+  async function handleUseTemplate(id: string) {
+    const r = await createQuestFromTemplate(id);
+    if ("error" in r) toast.error(formatActionError(r.error as Record<string, unknown>));
+    else {
+      toast.success("Quest created from template (draft)");
+      await reload();
+    }
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    if (!confirm("Delete this quest template?")) return;
+    const r = await deleteQuestTemplate(id);
+    if ("error" in r) toast.error(r.error as string);
+    else {
+      toast.success("Template deleted");
       await reload();
     }
   }
@@ -145,7 +227,7 @@ export default function TravelChallengesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Travel Challenges</h1>
+          <h1 className="text-2xl font-bold text-white">Quests</h1>
           <p className="text-zinc-400 mt-1">
             Bundle multiple challenges into a set. Complete any or all; merchants
             set the big-reward bonus.
@@ -155,14 +237,14 @@ export default function TravelChallengesPage() {
           onClick={() => setShowNew((v) => !v)}
           className="bg-red-600 hover:bg-red-700 text-white gap-2"
         >
-          <Plus className="h-4 w-4" /> New Travel Challenge
+          <Plus className="h-4 w-4" /> New Quest
         </Button>
       </div>
 
       {showNew && (
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-white">New Travel Challenge</CardTitle>
+            <CardTitle className="text-white">New Quest</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -313,67 +395,162 @@ export default function TravelChallengesPage() {
               <h3 className="text-sm font-semibold text-white">
                 Big Reward (if completion mode = All)
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Big reward title</Label>
-                  <Input
-                    value={form.big_reward_title}
-                    onChange={(e) =>
-                      setForm({ ...form, big_reward_title: e.target.value })
-                    }
-                    className="bg-zinc-800 border-zinc-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Type</Label>
-                  <Select
-                    value={form.big_reward_discount_type || undefined}
-                    onValueChange={(v: string | null) =>
-                      setForm({
-                        ...form,
-                        big_reward_discount_type: (v ?? "") as typeof form.big_reward_discount_type,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                      <SelectValue placeholder="(none)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">% discount</SelectItem>
-                      <SelectItem value="fixed">Fixed amount</SelectItem>
-                      <SelectItem value="freebie">Freebie</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
+              <div className="inline-flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5 text-xs">
+                {(["library", "custom"] as const).map((mode) => {
+                  const active = form.big_reward_source === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() =>
+                        setForm({ ...form, big_reward_source: mode })
+                      }
+                      className={`px-3 py-1.5 rounded-md transition-colors ${
+                        active
+                          ? "bg-zinc-700 text-white"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {mode === "library"
+                        ? `Pick from library (${libraryRewards.length})`
+                        : "Custom"}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Big reward description</Label>
-                <Textarea
-                  rows={2}
-                  value={form.big_reward_description}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      big_reward_description: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Big reward value</Label>
-                <Input
-                  type="number"
-                  value={form.big_reward_discount_value}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      big_reward_discount_value: e.target.value,
-                    })
-                  }
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
+
+              {form.big_reward_source === "library" ? (
+                libraryRewards.length === 0 ? (
+                  <p className="text-xs text-zinc-500">
+                    Your reward library is empty. Add one from the{" "}
+                    <a
+                      href="/admin/rewards"
+                      className="text-red-400 hover:text-red-300 underline"
+                    >
+                      Rewards page
+                    </a>{" "}
+                    or switch to Custom to create one now.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Reward</Label>
+                    <Select
+                      value={form.big_reward_reward_id || undefined}
+                      onValueChange={(v: string | null) => {
+                        if (!v) return;
+                        const picked = libraryRewards.find((r) => r.id === v);
+                        setForm({
+                          ...form,
+                          big_reward_reward_id: v,
+                          big_reward_title: picked?.title ?? "",
+                          big_reward_description: picked?.description ?? "",
+                          big_reward_discount_type:
+                            (picked?.discount_type ?? "") as typeof form.big_reward_discount_type,
+                          big_reward_discount_value:
+                            picked?.discount_value?.toString() ?? "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                        <SelectValue placeholder="Pick a reward" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {libraryRewards.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.title}{" "}
+                            {r.discount_type === "freebie"
+                              ? "(freebie)"
+                              : r.discount_value != null
+                                ? `(${r.discount_value}${
+                                    r.discount_type === "percentage" ? "%" : ""
+                                  })`
+                                : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Big reward title</Label>
+                      <Input
+                        value={form.big_reward_title}
+                        onChange={(e) =>
+                          setForm({ ...form, big_reward_title: e.target.value })
+                        }
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Type</Label>
+                      <Select
+                        value={form.big_reward_discount_type || undefined}
+                        onValueChange={(v: string | null) =>
+                          setForm({
+                            ...form,
+                            big_reward_discount_type: (v ?? "") as typeof form.big_reward_discount_type,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                          <SelectValue placeholder="(none)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">% discount</SelectItem>
+                          <SelectItem value="fixed">Fixed amount</SelectItem>
+                          <SelectItem value="freebie">Freebie</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward description</Label>
+                    <Textarea
+                      rows={2}
+                      value={form.big_reward_description}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_description: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward value</Label>
+                    <Input
+                      type="number"
+                      value={form.big_reward_discount_value}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_discount_value: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={form.big_reward_save_to_library}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          big_reward_save_to_library: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-red-600 focus:ring-red-600"
+                    />
+                    Also save this reward to my Rewards library for reuse
+                  </label>
+                </>
+              )}
             </div>
             <div className="flex gap-2 pt-3">
               <Button
@@ -438,10 +615,22 @@ export default function TravelChallengesPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  handleSaveTemplate(rec.id as string);
+                }}
+                className="absolute top-3 right-12 p-2 rounded-lg text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
+                title="Save as template"
+              >
+                <BookmarkPlus className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   handleDelete(rec.id as string, rec.title as string);
                 }}
                 className="absolute top-3 right-3 p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
-                title="Delete travel challenge"
+                title="Delete quest"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -450,10 +639,99 @@ export default function TravelChallengesPage() {
         })}
         {rows.length === 0 && (
           <p className="text-zinc-500 text-sm">
-            No travel challenges yet. Create your first one above.
+            No quests yet. Create your first one above.
           </p>
         )}
       </div>
+
+      {questTemplates.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
+            My Quest Templates
+          </h2>
+          <div className="grid gap-2">
+            {questTemplates.map((t) => (
+              <div
+                key={t.id as string}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {t.title as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {(t.stop_count as number) ?? 0} stop
+                    {(t.stop_count as number) === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={() => handleUseTemplate(t.id as string)}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Create quest
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteTemplate(t.id as string)}
+                    className="border-zinc-700 text-zinc-400"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {deletedRows.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+            Recently deleted (restorable for 30 days)
+          </h2>
+          <div className="grid gap-2">
+            {deletedRows.map((d) => (
+              <div
+                key={d.id as string}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-300 truncate">
+                    {d.title as string}
+                  </p>
+                  <p className="text-xs text-zinc-600">
+                    Deleted{" "}
+                    {d.deleted_at
+                      ? new Date(d.deleted_at as string).toLocaleDateString()
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRestore(d.id as string)}
+                    className="border-zinc-700 text-zinc-200 gap-1"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Restore
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handlePurge(d.id as string, d.title as string)}
+                    className="border-red-800 text-red-400"
+                  >
+                    Delete forever
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

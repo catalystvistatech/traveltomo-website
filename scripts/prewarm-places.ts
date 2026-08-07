@@ -117,7 +117,7 @@ async function prewarmCity(
       stats.fetched += raw.length;
 
       if (raw.length === 0) {
-        process.stdout.write(`  · ${type}: 0 results\n`);
+        process.stdout.write(`  Â· ${type}: 0 results\n`);
         continue;
       }
 
@@ -127,7 +127,7 @@ async function prewarmCity(
       });
       stats.mirrored += mirrored.length;
       process.stdout.write(
-        `  · ${type}: ${raw.length} fetched ? ${mirrored.length} mirrored\n`,
+        `  Â· ${type}: ${raw.length} fetched ? ${mirrored.length} mirrored\n`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -163,7 +163,7 @@ async function main() {
   }
 
   console.log(
-    `Prewarming ${targets.length} cit${targets.length === 1 ? "y" : "ies"} (refresh=${refresh})…`,
+    `Prewarming ${targets.length} cit${targets.length === 1 ? "y" : "ies"} (refresh=${refresh})â€¦`,
   );
 
   const allStats: PrewarmStats[] = [];
@@ -178,13 +178,13 @@ async function main() {
     console.log(
       `${s.city.padEnd(36)} attempted=${s.attempted}  fetched=${s.fetched}  mirrored=${s.mirrored}  errors=${s.errors.length}`,
     );
-    for (const e of s.errors) console.log(`    × ${e}`);
+    for (const e of s.errors) console.log(`    Ã— ${e}`);
   }
 
   const totalFetched = allStats.reduce((sum, s) => sum + s.fetched, 0);
   const totalCalls = allStats.reduce((sum, s) => sum + s.attempted, 0);
   console.log(
-    `\nTotal: ${totalCalls} Google calls · ${totalFetched} places mirrored.`,
+    `\nTotal: ${totalCalls} Google calls Â· ${totalFetched} places mirrored.`,
   );
   console.log(
     `Estimated Google cost: ~$${((totalCalls * 47) / 1000).toFixed(2)} (Enterprise+Atmosphere SKU @ $47/1k).`,

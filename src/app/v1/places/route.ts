@@ -8,9 +8,11 @@ import {
 } from "@/lib/google/places";
 import {
   DEFAULT_CACHE_TTL_HOURS,
+  hydrateMissingPlacePhotos,
   lookupCachedPlaces,
   mirrorPlaces,
 } from "@/lib/google/placesCache";
+import { annotateHasLiveChallenges } from "@/lib/places-challenge-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,7 @@ const VALID_ESTABLISHMENTS: EstablishmentType[] = [
   "landmark",
   "shopping",
   "entertainment",
+  "animal_themed",
 ];
 
 function parseTypes(raw: string | null): EstablishmentType[] {
@@ -93,8 +96,11 @@ export async function GET(request: Request) {
       if (cached.length > 0) {
         const sorted: NormalizedPlace[] =
           mode === "trending" ? sortByTrending(cached) : sortByDistance(cached, lat, lng);
-        const page = sorted.slice(offset, offset + limit);
+        const rawPage = await hydrateMissingPlacePhotos(
+          sorted.slice(offset, offset + limit)
+        );
         const hasMore = offset + limit < sorted.length;
+        const page = await annotateHasLiveChallenges(rawPage);
 
         return NextResponse.json(
           {
@@ -108,9 +114,11 @@ export async function GET(request: Request) {
           },
           {
             headers: {
-              "Cache-Control":
-                "public, s-maxage=120, stale-while-revalidate=3600",
-              Vary: "Authorization",
+              // Private + no shared (CDN) caching: the live-challenge flag must
+              // be fresh per request. A shared cache with stale-while-revalidate
+              // raced a stale `false` onto the first fetch after a challenge
+              // went live. The client still caches briefly for re-opens.
+              "Cache-Control": "private, max-age=30, must-revalidate",
             },
           },
         );
@@ -143,8 +151,9 @@ export async function GET(request: Request) {
           ? sortByTrending(mirrored)
           : sortByDistance(mirrored, lat, lng);
 
-      const page = sorted.slice(offset, offset + limit);
+      const rawPage = sorted.slice(offset, offset + limit);
       const hasMore = offset + limit < sorted.length;
+      const page = await annotateHasLiveChallenges(rawPage);
 
       return NextResponse.json(
         {
@@ -157,9 +166,7 @@ export async function GET(request: Request) {
         },
         {
           headers: {
-            "Cache-Control":
-              "public, s-maxage=120, stale-while-revalidate=3600",
-            Vary: "Authorization",
+            "Cache-Control": "private, max-age=30, must-revalidate",
           },
         },
       );
@@ -196,9 +203,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const dbRows = await hydrateMissingPlacePhotos(
+    (data ?? []) as { id: string; image_url: string | null; google_place_id: string | null }[]
+  );
+  const dbPage = await annotateHasLiveChallenges(dbRows);
+
   return NextResponse.json({
-    data: data ?? [],
-    count: data?.length ?? 0,
+    data: dbPage,
+    count: dbPage.length,
     source: "db",
     ...(googleError ? { google_error: googleError } : {}),
   });

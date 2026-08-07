@@ -19,6 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Crown, Star } from "lucide-react";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import {
+  formatTierPriceMonthly,
+  PROMOTION_TIER_PRICES_CENTS,
+} from "@/lib/constants/promotion-tiers";
+import { detectUserCurrency, formatMoney } from "@/lib/currency";
+import { getPhpFxRates } from "@/lib/actions/fx";
 
 type Sub = Awaited<ReturnType<typeof getActiveSubscription>>;
 type Row = Awaited<ReturnType<typeof listSubscriptionHistory>>[number];
@@ -33,7 +39,7 @@ const TIERS: {
   {
     key: "basic",
     title: "Basic",
-    price: "?99 / mo",
+    price: formatTierPriceMonthly("basic"),
     icon: <Sparkles className="h-5 w-5" />,
     perks: [
       "Stay visible in recommendations",
@@ -44,7 +50,7 @@ const TIERS: {
   {
     key: "featured",
     title: "Featured",
-    price: "?299 / mo",
+    price: formatTierPriceMonthly("featured"),
     icon: <Star className="h-5 w-5" />,
     perks: [
       "Boosted position in the dice pool",
@@ -55,7 +61,7 @@ const TIERS: {
   {
     key: "premium",
     title: "Premium",
-    price: "?799 / mo",
+    price: formatTierPriceMonthly("premium"),
     icon: <Crown className="h-5 w-5" />,
     perks: [
       "Top-of-list placement",
@@ -70,6 +76,18 @@ export default function PromotePage() {
   const [history, setHistory] = useState<Row[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pending, startTransition] = useTransition();
+  const [currency, setCurrency] = useState("PHP");
+  const [fxRates, setFxRates] = useState<Record<string, number> | null>(null);
+
+  // Approximate amount in the viewer's currency, or null when it's PHP /
+  // there's no rate (so we just show the billed PHP price).
+  function localPrice(tier: "basic" | "featured" | "premium"): string | null {
+    if (currency === "PHP" || !fxRates) return null;
+    const rate = fxRates[currency];
+    if (!rate) return null;
+    const php = PROMOTION_TIER_PRICES_CENTS[tier] / 100;
+    return formatMoney(php * rate, currency);
+  }
 
   async function reload() {
     setIsLoading(true);
@@ -84,6 +102,8 @@ export default function PromotePage() {
 
   useEffect(() => {
     reload();
+    setCurrency(detectUserCurrency());
+    getPhpFxRates().then(setFxRates);
   }, []);
 
   if (isLoading) return <PageSkeleton variant="form" />;
@@ -140,6 +160,11 @@ export default function PromotePage() {
           Merchants only appear in the traveler app if they&rsquo;re on an
           active promotion tier and currently open.
         </p>
+        {currency !== "PHP" && (
+          <p className="text-xs text-zinc-500 mt-1">
+            Billed in PHP. Amounts in {currency} are approximate.
+          </p>
+        )}
       </div>
 
       {active && (
@@ -181,6 +206,11 @@ export default function PromotePage() {
               </div>
               <CardDescription className="text-zinc-400">
                 {t.price}
+                {localPrice(t.key) && (
+                  <span className="ml-1 text-zinc-500">
+                    ({"\u2248"} {localPrice(t.key)})
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -210,6 +240,13 @@ export default function PromotePage() {
             <div className="divide-y divide-zinc-800">
               {history.map((h) => {
                 const r = h as Record<string, unknown>;
+                const isExpired =
+                  new Date(r.ends_at as string).getTime() < Date.now();
+                const isLive = (r.status as string) === "active" && !isExpired;
+                const label =
+                  (r.status as string) === "active" && isExpired
+                    ? "expired"
+                    : (r.status as string);
                 return (
                   <div
                     key={r.id as string}
@@ -219,18 +256,19 @@ export default function PromotePage() {
                       {r.tier as string}
                     </span>
                     <span className="text-zinc-500">
-                      {new Date(r.starts_at as string).toLocaleDateString()} ?{" "}
+                      {new Date(r.starts_at as string).toLocaleDateString()}
+                      {" \u2013 "}
                       {new Date(r.ends_at as string).toLocaleDateString()}
                     </span>
                     <Badge
                       variant="outline"
                       className={
-                        (r.status as string) === "active"
+                        isLive
                           ? "border-green-600 text-green-400"
                           : "border-zinc-700 text-zinc-400"
                       }
                     >
-                      {r.status as string}
+                      {label}
                     </Badge>
                   </div>
                 );

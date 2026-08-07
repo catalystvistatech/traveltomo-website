@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/actions/auth";
+import { getCurrentUser, requestMerchantAccess } from "@/lib/actions/auth";
 import {
   getRecommendationStatus,
   getAdminOverview,
@@ -30,6 +30,18 @@ import {
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
+
+  // Plain travelers (role "user") shouldn't see the merchant dashboard. Show
+  // them a clear "this is for merchants" notice with a path to either the app
+  // or requesting merchant access.
+  if (user.role === "user") {
+    return (
+      <TravelerNotice
+        pending={user.merchant_request_status === "pending"}
+        name={user.display_name}
+      />
+    );
+  }
 
   const isAdmin = user.role === "admin" || user.role === "superadmin";
 
@@ -63,7 +75,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="inline-block border-b-2 border-red-500 pb-1 text-3xl font-bold text-white">
           Welcome back, {user.display_name ?? "there"}
         </h1>
         <p className="text-zinc-400 mt-1">
@@ -96,7 +108,7 @@ export default async function DashboardPage() {
             accent={adminOverview.businessesPending > 0 ? "text-yellow-300" : undefined}
           />
           <StatCard
-            title="Pending Travel Challenges"
+            title="Pending Quests"
             value={adminOverview.travelChallengesPending}
             icon={<ShieldCheck className="h-4 w-4 text-yellow-400" />}
             href="/admin/manage/travel-challenges"
@@ -119,7 +131,7 @@ export default async function DashboardPage() {
       {summary && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            title="Live Travel Challenges"
+            title="Live Quests"
             value={summary.live}
             icon={<Eye className="h-4 w-4 text-green-400" />}
             accent="text-green-400"
@@ -151,7 +163,7 @@ export default async function DashboardPage() {
         <CardContent className="flex flex-wrap gap-3">
           <Link href="/admin/travel-challenges">
             <Button className="bg-red-600 hover:bg-red-700">
-              Manage Travel Challenges
+              Manage Quests
             </Button>
           </Link>
           <Link href="/admin/business">
@@ -184,12 +196,73 @@ export default async function DashboardPage() {
   );
 }
 
+function TravelerNotice({
+  pending,
+  name,
+}: {
+  pending: boolean;
+  name: string | null;
+}) {
+  return (
+    <div className="mx-auto mt-8 max-w-2xl space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-white">
+          Welcome, {name ?? "traveler"}
+        </h1>
+        <p className="mt-1 text-zinc-400">This dashboard is for merchants.</p>
+      </div>
+
+      {pending ? (
+        <Card className="bg-yellow-600/10 border-yellow-600/40">
+          <CardContent className="py-5 text-sm text-yellow-200">
+            Your request to become a merchant is{" "}
+            <b>pending admin verification</b>. We&rsquo;ll email you and send an
+            in-app notification once it&rsquo;s approved.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardContent className="space-y-4 py-6">
+            <p className="text-zinc-200">
+              You&rsquo;re signed in as a <b>traveler</b>. The TravelTomo app is
+              where you roll the dice, complete challenges, and earn rewards
+              &mdash; this dashboard is for businesses (merchants).
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a href="https://www.traveltomo.app" target="_blank" rel="noreferrer">
+                <Button className="bg-red-600 hover:bg-red-700">Get the app</Button>
+              </a>
+              <form
+                action={async () => {
+                  "use server";
+                  await requestMerchantAccess();
+                }}
+              >
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="border-zinc-700 text-zinc-200 hover:bg-zinc-800"
+                >
+                  I want to become a merchant
+                </Button>
+              </form>
+            </div>
+            <p className="text-xs text-zinc-500">
+              Becoming a merchant lets you create challenges and rewards for
+              travelers. An admin reviews each request.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function StatCard({
   title,
   value,
   icon,
   href,
-  accent = "text-white",
 }: {
   title: string;
   value: number;
@@ -198,17 +271,13 @@ function StatCard({
   accent?: string;
 }) {
   const content = (
-    <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-zinc-400">
-          {title}
-        </CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${accent}`}>{value}</div>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl bg-gradient-to-br from-red-600 to-red-800 p-5 shadow-lg shadow-red-950/40 ring-1 ring-red-500/30 transition-transform hover:-translate-y-0.5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-white/80">{title}</p>
+        <span className="text-white/70">{icon}</span>
+      </div>
+      <div className="mt-4 text-3xl font-bold text-white">{value}</div>
+    </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
 }
@@ -238,7 +307,7 @@ function RecommendationStatusCard({
     },
     {
       ok: status.liveTravelChallenges > 0,
-      label: `${status.liveTravelChallenges} live travel challenge(s)`,
+      label: `${status.liveTravelChallenges} live quest(s)`,
       href: "/admin/travel-challenges",
     },
   ];

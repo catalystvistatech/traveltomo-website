@@ -13,6 +13,8 @@ import {
   submitTravelChallengeForReview,
   cloneTemplateIntoTravelChallenge,
   listMerchantBusinesses,
+  listMerchantLibraryRewards,
+  uploadTravelChallengeCover,
 } from "@/lib/actions/travelChallenges";
 import { listPublishedTemplates } from "@/lib/actions/templates";
 import { getBusiness } from "@/lib/actions/business";
@@ -42,7 +44,7 @@ import {
   TRAVEL_CHALLENGE_STOP_COUNT,
   type EstablishmentType,
 } from "@/lib/validations/marketplace";
-import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X, ImagePlus } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import type { PlacePrediction } from "@/components/business-location-picker";
 import { APIProvider, Map, Marker, useMap } from "@vis.gl/react-google-maps";
@@ -86,7 +88,7 @@ const emptyChild = {
   description: "",
   instructions: "",
   type: "checkin" as "checkin" | "photo" | "qr" | "quiz",
-  verification_type: "gps" as
+  verification_type: "photo_upload" as
     | "gps"
     | "qr_scan"
     | "photo_upload"
@@ -126,7 +128,18 @@ export default function TravelChallengeDetailPage({
   const [saving, setSaving] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [editUploading, setEditUploading] = useState(false);
+  const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null);
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
+  const [libraryRewards, setLibraryRewards] = useState<
+    {
+      id: string;
+      title: string;
+      description: string | null;
+      discount_type: "percentage" | "fixed" | "freebie";
+      discount_value: number | null;
+    }[]
+  >([]);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
@@ -136,6 +149,9 @@ export default function TravelChallengeDetailPage({
     date_range_start: "",
     date_range_end: "",
     max_total_completions: "",
+    big_reward_source: "custom" as "library" | "custom",
+    big_reward_reward_id: "",
+    big_reward_save_to_library: false,
     big_reward_title: "",
     big_reward_description: "",
     big_reward_discount_type: "" as "" | "percentage" | "fixed" | "freebie",
@@ -176,6 +192,7 @@ export default function TravelChallengeDetailPage({
       }
     });
     listMerchantBusinesses().then(setBusinesses);
+    listMerchantLibraryRewards().then(setLibraryRewards);
   }, [id]);
 
   useEffect(() => {
@@ -278,7 +295,7 @@ export default function TravelChallengeDetailPage({
     Number.isFinite(parseFloat(child.latitude)) &&
     Number.isFinite(parseFloat(child.longitude));
 
-  async function handleAddChild() {
+  async function handleAddChild(asDraft = false) {
     setSaving(true);
     const isGps = child.verification_type === "gps";
     const payload = {
@@ -297,13 +314,19 @@ export default function TravelChallengeDetailPage({
     };
     const r = editingChildId
       ? await updateChildChallenge(editingChildId, payload)
-      : await addChildChallenge(id, payload);
+      : await addChildChallenge(id, payload, asDraft);
     setSaving(false);
     if ("error" in r) {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success(editingChildId ? "Challenge updated" : "Challenge added");
+    toast.success(
+      editingChildId
+        ? "Challenge updated"
+        : asDraft
+          ? "Stop saved as draft"
+          : "Challenge added"
+    );
     setShowChild(false);
     setEditingChildId(null);
     setChild({ ...emptyChild });
@@ -372,7 +395,7 @@ export default function TravelChallengeDetailPage({
     const r = await submitTravelChallengeForReview(id);
     if ("error" in r) toast.error(r.error as string);
     else {
-      toast.success("Travel challenge is now live!");
+      toast.success("Quest is now live!");
       await reload();
     }
   }
@@ -388,12 +411,36 @@ export default function TravelChallengeDetailPage({
       date_range_start: (r.date_range_start as string) ?? "",
       date_range_end: (r.date_range_end as string) ?? "",
       max_total_completions: r.max_total_completions != null ? String(r.max_total_completions) : "",
+      // Open in "custom" mode by default so the existing values show in
+      // the editable fields. The user can flip to "library" to swap in
+      // a saved reward.
+      big_reward_source: "custom",
+      big_reward_reward_id: "",
+      big_reward_save_to_library: false,
       big_reward_title: (r.big_reward_title as string) ?? "",
       big_reward_description: (r.big_reward_description as string) ?? "",
       big_reward_discount_type: ((r.big_reward_discount_type as string) ?? "") as typeof editForm.big_reward_discount_type,
       big_reward_discount_value: r.big_reward_discount_value != null ? String(r.big_reward_discount_value) : "",
     });
+    setEditCoverPreview(null);
     setShowEdit(true);
+  }
+
+  async function handleEditCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await uploadTravelChallengeCover(fd);
+    setEditUploading(false);
+    if ("error" in r) {
+      toast.error(r.error as string);
+      return;
+    }
+    const url = (r as { url: string }).url;
+    setEditForm((f) => ({ ...f, cover_url: url }));
+    setEditCoverPreview(URL.createObjectURL(file));
   }
 
   async function handleSaveEdit() {
@@ -403,6 +450,7 @@ export default function TravelChallengeDetailPage({
       max_total_completions: editForm.max_total_completions ? parseInt(editForm.max_total_completions) : undefined,
       big_reward_discount_value: editForm.big_reward_discount_value ? parseFloat(editForm.big_reward_discount_value) : undefined,
       big_reward_discount_type: editForm.big_reward_discount_type || undefined,
+      big_reward_reward_id: editForm.big_reward_reward_id || undefined,
     };
     const r = await updateTravelChallenge(id, payload);
     setEditSaving(false);
@@ -410,16 +458,19 @@ export default function TravelChallengeDetailPage({
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Travel challenge updated");
+    toast.success("Quest updated");
     setShowEdit(false);
+    setEditCoverPreview(null);
     await reload();
+    // Refresh library list in case the user opted to save a new reward.
+    listMerchantLibraryRewards().then(setLibraryRewards);
   }
 
   async function handleDeleteTC() {
     if (!confirm(`Delete "${(tc as Record<string, unknown>).title}"? All stops will also be deleted. This cannot be undone.`)) return;
     const r = await deleteTravelChallenge(id);
     if ("error" in r) { toast.error(r.error as string); return; }
-    toast.success("Travel challenge deleted");
+    toast.success("Quest deleted");
     router.push("/admin/travel-challenges");
   }
 
@@ -564,12 +615,12 @@ export default function TravelChallengeDetailPage({
       {showEdit && (
         <Card className="bg-zinc-900 border-zinc-700">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-white text-base">Edit Travel Challenge</CardTitle>
-            <button type="button" onClick={() => setShowEdit(false)} className="text-zinc-500 hover:text-white">
-              <X className="h-4 w-4" />
+            <CardTitle className="text-white text-lg">Edit Quest</CardTitle>
+            <button type="button" onClick={() => setShowEdit(false)} aria-label="Close" className="text-zinc-500 hover:text-white">
+              <X className="h-5 w-5" />
             </button>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             {businesses.length > 1 && (
               <div className="space-y-2">
                 <Label className="text-zinc-300">Business</Label>
@@ -577,7 +628,7 @@ export default function TravelChallengeDetailPage({
                   value={editForm.business_id}
                   onValueChange={(v) => { if (v) setEditForm({ ...editForm, business_id: v }); }}
                 >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
                     <span className="truncate">
                       {businesses.find((b) => b.id === editForm.business_id)?.name ?? "Select a business"}
                     </span>
@@ -598,43 +649,256 @@ export default function TravelChallengeDetailPage({
               <div className="space-y-2">
                 <Label className="text-zinc-300">Completion Mode</Label>
                 <Select value={editForm.completion_mode} onValueChange={(v: string | null) => v && setEditForm({ ...editForm, completion_mode: v as "any" | "all" })}>
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="any">Any — complete 1</SelectItem>
                     <SelectItem value="all">All — complete every stop</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-zinc-500">
+                  &ldquo;Any&rdquo; lets travelers finish one stop. &ldquo;All&rdquo; requires every stop and unlocks the Big Reward below.
+                </p>
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-zinc-300">Description</Label>
               <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Start Date</Label>
-                <Input type="date" value={editForm.date_range_start} onChange={(e) => setEditForm({ ...editForm, date_range_start: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">End Date</Label>
-                <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
-              </div>
+
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Header Photo</Label>
+              {editCoverPreview || editForm.cover_url ? (
+                <div className="relative w-full h-40 rounded-lg overflow-hidden border border-zinc-700">
+                  <img
+                    src={editCoverPreview ?? editForm.cover_url}
+                    alt="Cover"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm((f) => ({ ...f, cover_url: "" }));
+                      setEditCoverPreview(null);
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80"
+                    title="Remove cover"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 h-40 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 cursor-pointer transition-colors">
+                  {editUploading ? (
+                    <p className="text-sm text-zinc-400">Uploading...</p>
+                  ) : (
+                    <>
+                      <ImagePlus className="h-8 w-8 text-zinc-500" />
+                      <p className="text-sm text-zinc-400">
+                        Click to upload a cover image
+                      </p>
+                      <p className="text-xs text-zinc-600">Max 5 MB</p>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditCoverUpload}
+                    className="hidden"
+                    disabled={editUploading}
+                  />
+                </label>
+              )}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Big Reward Title</Label>
-                <Input value={editForm.big_reward_title} onChange={(e) => setEditForm({ ...editForm, big_reward_title: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+
+            <div className="space-y-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Start Date</Label>
+                  <Input type="date" value={editForm.date_range_start} onChange={(e) => setEditForm({ ...editForm, date_range_start: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">End Date</Label>
+                  <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Max Completions</Label>
-                <Input type="number" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} placeholder="Unlimited" className="bg-zinc-800 border-zinc-700 text-white" />
-              </div>
+              <p className="text-xs text-zinc-500">
+                When the quest is playable. Leave both blank to keep it always on.
+              </p>
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleSaveEdit} disabled={editSaving} className="bg-red-600 hover:bg-red-700 text-white">
+
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Max Completions</Label>
+              <Input type="number" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} placeholder="Unlimited" className="bg-zinc-800 border-zinc-700 text-white" />
+              <p className="text-xs text-zinc-500">
+                Total number of travelers who can claim this quest. Leave blank for unlimited.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-800 space-y-3">
+              <h4 className="text-sm font-semibold text-white">
+                Big Reward (if completion mode = All)
+              </h4>
+
+              <div className="inline-flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5 text-xs">
+                {(["library", "custom"] as const).map((mode) => {
+                  const active = editForm.big_reward_source === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, big_reward_source: mode })}
+                      className={`px-3 py-1.5 rounded-md transition-colors ${
+                        active
+                          ? "bg-zinc-700 text-white"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {mode === "library"
+                        ? `Pick from library (${libraryRewards.length})`
+                        : "Custom"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {editForm.big_reward_source === "library" ? (
+                libraryRewards.length === 0 ? (
+                  <p className="text-xs text-zinc-500">
+                    Your reward library is empty. Add one from the{" "}
+                    <a
+                      href="/admin/rewards"
+                      className="text-red-400 hover:text-red-300 underline"
+                    >
+                      Rewards page
+                    </a>{" "}
+                    or switch to Custom to update the existing one.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Reward</Label>
+                    <Select
+                      value={editForm.big_reward_reward_id || undefined}
+                      onValueChange={(v: string | null) => {
+                        if (!v) return;
+                        const picked = libraryRewards.find((r) => r.id === v);
+                        setEditForm({
+                          ...editForm,
+                          big_reward_reward_id: v,
+                          big_reward_title: picked?.title ?? "",
+                          big_reward_description: picked?.description ?? "",
+                          big_reward_discount_type:
+                            (picked?.discount_type ?? "") as typeof editForm.big_reward_discount_type,
+                          big_reward_discount_value:
+                            picked?.discount_value?.toString() ?? "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
+                        <SelectValue placeholder="Pick a reward" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {libraryRewards.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.title}{" "}
+                            {r.discount_type === "freebie"
+                              ? "(freebie)"
+                              : r.discount_value != null
+                                ? `(${r.discount_value}${
+                                    r.discount_type === "percentage" ? "%" : ""
+                                  })`
+                                : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Big reward title</Label>
+                      <Input
+                        value={editForm.big_reward_title}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, big_reward_title: e.target.value })
+                        }
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Type</Label>
+                      <Select
+                        value={editForm.big_reward_discount_type || undefined}
+                        onValueChange={(v: string | null) =>
+                          setEditForm({
+                            ...editForm,
+                            big_reward_discount_type: (v ?? "") as typeof editForm.big_reward_discount_type,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white">
+                          <SelectValue placeholder="(none)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">% discount</SelectItem>
+                          <SelectItem value="fixed">Fixed amount</SelectItem>
+                          <SelectItem value="freebie">Freebie</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward description</Label>
+                    <Textarea
+                      rows={2}
+                      value={editForm.big_reward_description}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          big_reward_description: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-zinc-300">Big reward value</Label>
+                    <Input
+                      type="number"
+                      value={editForm.big_reward_discount_value}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          big_reward_discount_value: e.target.value,
+                        })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2.5 text-sm text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.big_reward_save_to_library}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          big_reward_save_to_library: e.target.checked,
+                        })
+                      }
+                      className="h-5 w-5 rounded border-zinc-700 bg-zinc-800 text-red-600 focus:ring-red-600"
+                    />
+                    Also save this reward to my Rewards library for reuse
+                  </label>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t border-zinc-800">
+              <Button onClick={handleSaveEdit} disabled={editSaving} className="h-11 px-6 text-base bg-red-600 hover:bg-red-700 text-white mt-3">
                 {editSaving ? "Saving..." : "Save Changes"}
               </Button>
-              <Button variant="ghost" onClick={() => setShowEdit(false)} className="text-zinc-400">Cancel</Button>
+              <Button variant="ghost" onClick={() => { setShowEdit(false); setEditCoverPreview(null); }} className="h-11 px-5 text-base text-zinc-400 mt-3">Cancel</Button>
             </div>
           </CardContent>
         </Card>
@@ -969,7 +1233,7 @@ export default function TravelChallengeDetailPage({
 
             <div className="flex gap-2 pt-2">
               <Button
-                onClick={handleAddChild}
+                onClick={() => handleAddChild(false)}
                 disabled={saving}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
@@ -979,6 +1243,17 @@ export default function TravelChallengeDetailPage({
                     ? "Save Changes"
                     : "Add Challenge"}
               </Button>
+              {!editingChildId && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleAddChild(true)}
+                  disabled={saving}
+                  title="Add this stop but keep it as a draft — it won't be shown to players until the set is published."
+                  className="border-zinc-700 text-zinc-200"
+                >
+                  Save as Draft
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 onClick={() => {

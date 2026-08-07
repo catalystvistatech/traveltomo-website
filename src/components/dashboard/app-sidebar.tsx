@@ -1,45 +1,109 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Store, Trophy, Gift, BarChart3,
-  Shield, ShieldCheck, MapPin, Users, LogOut, ListChecks, CheckCircle2, Megaphone, FileStack, Inbox, History,
+  LayoutDashboard,
+  Store,
+  Trophy,
+  Gift,
+  BarChart3,
+  Shield,
+  ShieldCheck,
+  MapPin,
+  Users,
+  LogOut,
+  ListChecks,
+  CheckCircle2,
+  Megaphone,
+  FileStack,
+  Inbox,
+  History,
+  CreditCard,
+  Search,
+  HelpCircle,
 } from "lucide-react";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
-  SidebarGroupContent, SidebarMenu, SidebarMenuButton,
-  SidebarMenuItem, SidebarHeader, SidebarFooter,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { signOut } from "@/lib/actions/auth";
 import type { UserProfile } from "@/lib/actions/auth";
 
-const merchantNav = [
-  { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { title: "Business Profile", href: "/admin/business", icon: Store },
-  { title: "Travel Challenges", href: "/admin/travel-challenges", icon: Trophy },
-  { title: "Template Library", href: "/admin/template-library", icon: FileStack },
-  { title: "Verify Completions", href: "/admin/completions", icon: CheckCircle2 },
-  { title: "Claim History", href: "/admin/claims", icon: History },
-  { title: "Promote", href: "/admin/promote", icon: Megaphone },
-  { title: "Rewards", href: "/admin/rewards", icon: Gift },
-  { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { title: "Inbox", href: "/admin/inbox", icon: Inbox },
-];
-
-const adminNav = [
-  { title: "Users", href: "/admin/manage/users", icon: Users },
-  { title: "Business Verification", href: "/admin/manage/businesses", icon: Shield },
-  { title: "Travel Challenge Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
-  { title: "Challenge Approvals", href: "/admin/manage/challenges", icon: ListChecks },
-  { title: "Templates", href: "/admin/templates", icon: FileStack },
-  { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
-  { title: "Places", href: "/admin/manage/places", icon: MapPin },
-];
+type NavItem = {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+type NavGroup = { label: string; items: NavItem[] };
 
 export function AppSidebar({ user }: { user: UserProfile }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [query, setQuery] = useState("");
+
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const roleLabel =
+    user.role === "superadmin"
+      ? "Superadmin"
+      : user.role === "admin"
+        ? "Admin"
+        : "Merchant";
+  const portalLabel = `${roleLabel} Portal`;
+
+  const groups: NavGroup[] = [
+    {
+      label: "Overview",
+      items: [{ title: "Dashboard", href: "/admin", icon: LayoutDashboard }],
+    },
+    {
+      label: "Manage Business",
+      items: [
+        { title: "Profile", href: "/admin/business", icon: Store },
+        { title: "Challenges", href: "/admin/travel-challenges", icon: Trophy },
+        { title: "Templates", href: "/admin/template-library", icon: FileStack },
+        { title: "Verifications", href: "/admin/completions", icon: CheckCircle2 },
+        { title: "Claim History", href: "/admin/claims", icon: History },
+        { title: "Promotions", href: "/admin/promote", icon: Megaphone },
+        { title: "Rewards", href: "/admin/rewards", icon: Gift },
+        ...(!isStaff
+          ? [{ title: "Billing", href: "/admin/billing", icon: CreditCard }]
+          : []),
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+        { title: "Inbox", href: "/admin/inbox", icon: Inbox },
+      ],
+    },
+  ];
+
+  const adminGroup: NavGroup = {
+    label: "Administration",
+    items: [
+      { title: "Users", href: "/admin/manage/users", icon: Users },
+      { title: "Business Verification", href: "/admin/manage/businesses", icon: Shield },
+      { title: "Quest Reviews", href: "/admin/manage/travel-challenges", icon: ShieldCheck },
+      { title: "Challenge Approvals", href: "/admin/manage/challenges", icon: ListChecks },
+      { title: "Templates", href: "/admin/templates", icon: FileStack },
+      { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
+      { title: "Places", href: "/admin/manage/places", icon: MapPin },
+    ],
+  };
+
+  const allGroups = isStaff ? [...groups, adminGroup] : groups;
+  const q = query.trim().toLowerCase();
+  const filtered = allGroups
+    .map((g) => ({
+      ...g,
+      items: q ? g.items.filter((i) => i.title.toLowerCase().includes(q)) : g.items,
+    }))
+    .filter((g) => g.items.length > 0);
 
   async function handleSignOut() {
     await signOut();
@@ -47,62 +111,118 @@ export function AppSidebar({ user }: { user: UserProfile }) {
     router.refresh();
   }
 
+  function isActive(href: string) {
+    return href === "/admin"
+      ? pathname === "/admin"
+      : pathname === href || pathname.startsWith(href + "/");
+  }
+
   return (
-    <Sidebar className="border-zinc-800">
-      <SidebarHeader className="border-b border-zinc-800 p-4">
-        <Link href="/admin" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600">
-            <span className="text-sm font-bold text-white">T</span>
-          </div>
-          <span className="text-lg font-bold text-white">TravelTomo</span>
+    <Sidebar className="border-zinc-800 bg-black">
+      <SidebarHeader className="gap-3 border-b border-zinc-800/60 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/admin" className="block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="TravelTomo" className="h-10 w-auto" />
+            <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              {portalLabel}
+            </p>
+          </Link>
+          <Link
+            href="/admin/rewards"
+            title="Create rewards"
+            className="shrink-0 text-red-400 hover:text-red-300"
+          >
+            <Gift className="h-6 w-6" />
+          </Link>
+        </div>
+
+        <Link
+          href="/admin/rewards"
+          className="block rounded-lg border border-dashed border-red-500/40 bg-red-500/5 px-3 py-1.5 text-center text-[11px] leading-tight text-red-300 hover:bg-red-500/10"
+        >
+          Click me to create rewards!
         </Link>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            className="w-full rounded-full border border-zinc-800 bg-zinc-900/80 py-2 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-red-500/50 focus:outline-none"
+          />
+        </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-zinc-500">Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {merchantNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton isActive={pathname === item.href} render={<Link href={item.href} />}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        {(user.role === "admin" || user.role === "superadmin") && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-zinc-500">Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminNav.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton isActive={pathname === item.href} render={<Link href={item.href} />}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+
+      <SidebarContent className="px-2 py-2">
+        {filtered.map((group) => (
+          <div key={group.label} className="px-1 py-1.5">
+            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+              {group.label}
+            </p>
+            <nav className="space-y-1">
+              {group.items.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 rounded-full px-3 py-2 text-sm transition-colors ${
+                      active
+                        ? "bg-red-600 font-medium text-white shadow-sm shadow-red-900/40"
+                        : "text-zinc-300 hover:bg-zinc-800/70 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{item.title}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <p className="px-4 py-6 text-sm text-zinc-600">No matches.</p>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t border-zinc-800 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700 text-xs font-bold text-white">
+
+      <SidebarFooter className="border-t border-zinc-800/60 p-2">
+        <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          General
+        </p>
+        <nav className="space-y-1">
+          <a
+            href="/help"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 rounded-full px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-white"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span>Help &amp; Support</span>
+          </a>
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-full px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-white"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Log out</span>
+          </button>
+        </nav>
+        <div className="mt-2 flex items-center gap-3 rounded-xl bg-zinc-900/60 px-3 py-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-600 text-base font-bold text-white">
             {(user.display_name ?? user.email)?.[0]?.toUpperCase() ?? "?"}
           </div>
-          <div className="flex-1 truncate">
-            <p className="text-sm font-medium text-white truncate">{user.display_name ?? "Merchant"}</p>
-            <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">
+              {user.display_name ?? roleLabel}
+            </p>
+            <p className="truncate text-[11px] text-zinc-500">{user.email}</p>
+            <span className="mt-1 inline-block rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300">
+              {roleLabel}
+            </span>
           </div>
-          <button onClick={handleSignOut} className="text-zinc-400 hover:text-white transition-colors" title="Sign out">
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
       </SidebarFooter>
     </Sidebar>

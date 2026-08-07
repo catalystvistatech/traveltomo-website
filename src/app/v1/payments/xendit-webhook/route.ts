@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   const { data: subscription } = await admin
     .from("merchant_subscriptions")
-    .select("id, status")
+    .select("id, status, merchant_id")
     .eq("external_ref", body.external_id)
     .maybeSingle();
 
@@ -51,6 +51,17 @@ export async function POST(request: Request) {
     .eq("id", subscription.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Once this promotion is active, cancel the merchant's other active
+  // promotions so only one runs at a time (tier switch supersedes the old).
+  if (nextStatus === "active" && subscription.merchant_id) {
+    await admin
+      .from("merchant_subscriptions")
+      .update({ status: "cancelled" })
+      .eq("merchant_id", subscription.merchant_id)
+      .eq("status", "active")
+      .neq("id", subscription.id);
+  }
 
   return NextResponse.json({ ok: true, subscription_id: subscription.id, status: nextStatus });
 }

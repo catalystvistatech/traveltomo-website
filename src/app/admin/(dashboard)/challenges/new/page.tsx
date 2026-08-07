@@ -71,7 +71,7 @@ export default function NewChallengePage() {
   });
 
   const [verification, setVerification] = useState({
-    verification_type: "",
+    verification_type: "photo_upload",
     quiz_question: "",
     quiz_choices: ["", "", "", ""],
     quiz_answer: "",
