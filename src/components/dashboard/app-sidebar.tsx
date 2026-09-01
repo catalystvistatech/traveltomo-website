@@ -23,6 +23,7 @@ import {
   CreditCard,
   Search,
   HelpCircle,
+  UserCog,
 } from "lucide-react";
 import {
   Sidebar,
@@ -93,6 +94,17 @@ export function AppSidebar({ user }: { user: UserProfile }) {
       { title: "Templates", href: "/admin/templates", icon: FileStack },
       { title: "Merchants", href: "/admin/manage/merchants", icon: Users },
       { title: "Places", href: "/admin/manage/places", icon: MapPin },
+      // Superadmin only. Acting as a merchant is a support capability, not a
+      // moderation one, so it is not offered to plain admins.
+      ...(user.role === "superadmin"
+        ? [
+            {
+              title: "Act as Merchant",
+              href: "/admin/manage/act-as",
+              icon: UserCog,
+            },
+          ]
+        : []),
     ],
   };
 
