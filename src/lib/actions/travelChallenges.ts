@@ -305,12 +305,39 @@ export async function updateTravelChallenge(id: string, input: unknown) {
     big_reward_discount_value: bigReward.discountValue,
   };
   if (parsed.data.business_id) {
+    // Re-pointing a quest at a business is only allowed onto a business the
+    // caller owns AND that is verified — mirroring createTravelChallenge.
+    // Without this a merchant could attach their quest to any other
+    // merchant's business by id, bypassing the create-time check. Staff
+    // manage the marketplace and may re-point freely.
+    const callerIsStaff =
+      gate.user.role === "admin" || gate.user.role === "superadmin";
+    if (!callerIsStaff) {
+      const { data: biz, error: bizError } = await supabase
+        .from("businesses")
+        .select("id, verification_status")
+        .eq("id", parsed.data.business_id)
+        .eq("merchant_id", gate.user.id)
+        .maybeSingle();
+      if (bizError) return { error: { _form: [bizError.message] } };
+      if (!biz) {
+        return { error: { _form: ["The selected business doesn't belong to you."] } };
+      }
+      if (biz.verification_status !== "approved") {
+        return { error: { _form: ["The selected business is not verified yet."] } };
+      }
+    }
     updatePayload.business_id = parsed.data.business_id;
   }
-  const { error } = await supabase
+  // Ownership is enforced here rather than left to RLS alone: a merchant
+  // may only edit their own quest. Staff may act on any row.
+  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
+  const query = supabase
     .from("travel_challenges")
     .update(updatePayload)
     .eq("id", id);
+  if (!isStaff) query.eq("merchant_id", gate.user.id);
+  const { error } = await query;
 
   if (error) return { error: { _form: [error.message] } };
   revalidatePath("/admin", "layout");
@@ -335,6 +362,21 @@ export async function submitTravelChallengeForReview(id: string) {
   if ("error" in gate) return { error: gate.error };
 
   const supabase = await createClient();
+
+  // Ownership is decided once, up front, rather than left to RLS alone.
+  // Previously the parent update and the child-stop update below both
+  // matched by quest id only, so under the permissive staff policies any
+  // id sent by the client would have been published.
+  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
+  const { data: quest, error: questError } = await supabase
+    .from("travel_challenges")
+    .select("id, merchant_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (questError) return { error: questError.message };
+  if (!quest || (!isStaff && quest.merchant_id !== gate.user.id)) {
+    return { error: "Quest not found or not yours." };
+  }
 
   const { count: stopCount, error: countError } = await supabase
     .from("challenges")
@@ -597,10 +639,20 @@ export async function deleteTravelChallenge(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
 
-  // Preserve a reusable copy in the merchant's quest-template library before
+  // Preserve a reusable copy in the MERCHANT's quest-template library before
   // trashing, so a deleted quest can be re-created later even after the
-  // 30-day trash window passes.
-  await saveQuestAsTemplate(id);
+  // 30-day trash window passes. Filed under the quest's owner (not the
+  // caller) so a staff-initiated delete still leaves the merchant a copy.
+  // If the snapshot can't be written, refuse to trash: a delete that
+  // silently loses its only recovery copy is worse than one that fails
+  // loudly. Previously the result was discarded and the quest was trashed
+  // regardless.
+  const snapshot = await saveQuestAsTemplate(id, { fileUnder: "owner" });
+  if ("error" in snapshot) {
+    return {
+      error: `Couldn't save a recovery copy, so the quest was not deleted: ${snapshot.error}`,
+    };
+  }
 
   const supabase = await createClient();
   const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
@@ -670,7 +722,10 @@ export async function listDeletedTravelChallenges() {
 
 // MARK: - Quest templates (whole-quest snapshots) --------------------------
 
-export async function saveQuestAsTemplate(id: string) {
+export async function saveQuestAsTemplate(
+  id: string,
+  options: { fileUnder?: "owner" | "caller" } = {}
+) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
   const supabase = await createClient();
@@ -735,8 +790,20 @@ export async function saveQuestAsTemplate(id: string) {
     stops,
   };
 
+  // Two callers, two owners:
+  //  - "owner"  (deleteTravelChallenge's recovery snapshot): file under the
+  //    QUEST's owner so a merchant can restore a quest that staff deleted.
+  //    Writing it under the caller used to put the snapshot in the staff
+  //    member's own library, where the merchant could never find it.
+  //  - "caller" (the explicit "Save as template" button, the default):
+  //    file under whoever pressed it, so a staff bookmark lands in a
+  //    library they can actually see and use.
+  // For a merchant acting on their own quest both ids are identical. Staff
+  // writing into another owner's library is permitted by migrations 055/056.
+  const templateOwnerId =
+    options.fileUnder === "owner" ? quest.merchant_id : gate.user.id;
   const { error } = await supabase.from("quest_templates").insert({
-    merchant_id: gate.user.id,
+    merchant_id: templateOwnerId,
     title: quest.title as string,
     description: (quest.description as string | null) ?? null,
     stop_count: stops.length,
@@ -868,10 +935,16 @@ export async function removeChildChallenge(childId: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
   const supabase = await createClient();
-  const { error } = await supabase
+  // Ownership is enforced here rather than left to RLS alone: this was a
+  // bare delete by id, so under the permissive staff policies any child
+  // id sent by the client would have been removed.
+  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
+  const query = supabase
     .from("challenges")
     .delete()
     .eq("id", childId);
+  if (!isStaff) query.eq("merchant_id", gate.user.id);
+  const { error } = await query;
   if (error) return { error: error.message };
   return { success: true };
 }
