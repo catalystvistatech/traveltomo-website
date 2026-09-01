@@ -117,10 +117,14 @@ export async function upsertBusiness(
   const gate = await assertBusinessWriteAllowed();
   if ("error" in gate) return { error: { _form: [gate.error] } };
   const profile = gate.user;
+  // Single identity source. The gate already authenticated the caller and
+  // loaded their profile, so the row owner is derived from that same
+  // profile. Previously the permission check read `gate.user` while the
+  // written `merchant_id` came from a second, separate `auth.getUser()`
+  // lookup — two identity sources for one action, which could disagree.
+  const user = { id: profile.id };
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: { _form: ["Not authenticated"] } };
 
   const bypass = canBypassVerification(profile.role);
   const now = new Date().toISOString();

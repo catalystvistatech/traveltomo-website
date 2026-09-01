@@ -32,14 +32,22 @@ export async function verifyCompletion(completionId: string) {
   if (!user) return { error: "Not authenticated" };
   const supabase = await createClient();
 
-  const { data: completion, error: fetchError } = await supabase
+  // Ownership is enforced on the fetch rather than left to RLS alone: a
+  // merchant may only act on completions of their own challenges, and the
+  // update below only runs once this lookup has succeeded. Previously both
+  // the fetch and the update matched by completion id alone, so under the
+  // permissive staff policies any id sent by the client was accepted.
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const fetchQuery = supabase
     .from("challenge_completions")
-    .select("id, user_id, challenge_id, completed_at, challenges!inner(title)")
-    .eq("id", completionId)
-    .maybeSingle();
+    .select("id, user_id, challenge_id, completed_at, challenges!inner(title, merchant_id)")
+    .eq("id", completionId);
+  if (!isStaff) fetchQuery.eq("challenges.merchant_id", user.id);
+  const { data: completion, error: fetchError } = await fetchQuery.maybeSingle();
   if (fetchError) return { error: fetchError.message };
+  if (!completion) return { error: "Completion not found or not yours." };
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("challenge_completions")
     .update({
       verification_status: "verified",
@@ -55,8 +63,16 @@ export async function verifyCompletion(completionId: string) {
         (completion as { completed_at?: string | null } | null)?.completed_at ??
         new Date().toISOString(),
     })
-    .eq("id", completionId);
+    .eq("id", completionId)
+    .select("id");
   if (error) return { error: error.message };
+  // An update that RLS silently filtered to zero rows is not a success.
+  // Staff hold SELECT but no UPDATE policy on challenge_completions, so
+  // without this check a staff verify reported success and pushed a
+  // "Reward unlocked" notification while nothing had actually changed.
+  if (!updated || updated.length === 0) {
+    return { error: "Completion not found, or you don't have permission to update it." };
+  }
 
   if (completion?.user_id) {
     const challengeTitle =
@@ -87,14 +103,22 @@ export async function rejectCompletion(
   if (!user) return { error: "Not authenticated" };
   const supabase = await createClient();
 
-  const { data: completion, error: fetchError } = await supabase
+  // Ownership is enforced on the fetch rather than left to RLS alone: a
+  // merchant may only act on completions of their own challenges, and the
+  // update below only runs once this lookup has succeeded. Previously both
+  // the fetch and the update matched by completion id alone, so under the
+  // permissive staff policies any id sent by the client was accepted.
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const fetchQuery = supabase
     .from("challenge_completions")
-    .select("id, user_id, challenge_id, completed_at, challenges!inner(title)")
-    .eq("id", completionId)
-    .maybeSingle();
+    .select("id, user_id, challenge_id, completed_at, challenges!inner(title, merchant_id)")
+    .eq("id", completionId);
+  if (!isStaff) fetchQuery.eq("challenges.merchant_id", user.id);
+  const { data: completion, error: fetchError } = await fetchQuery.maybeSingle();
   if (fetchError) return { error: fetchError.message };
+  if (!completion) return { error: "Completion not found or not yours." };
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("challenge_completions")
     .update({
       verification_status: "rejected",
@@ -109,8 +133,16 @@ export async function rejectCompletion(
         (completion as { completed_at?: string | null } | null)?.completed_at ??
         new Date().toISOString(),
     })
-    .eq("id", completionId);
+    .eq("id", completionId)
+    .select("id");
   if (error) return { error: error.message };
+  // An update that RLS silently filtered to zero rows is not a success.
+  // Staff hold SELECT but no UPDATE policy on challenge_completions, so
+  // without this check a staff reject reported success and pushed a
+  // rejection notification while nothing had actually changed.
+  if (!updated || updated.length === 0) {
+    return { error: "Completion not found, or you don't have permission to update it." };
+  }
 
   if (completion?.user_id) {
     const challengeTitle =
