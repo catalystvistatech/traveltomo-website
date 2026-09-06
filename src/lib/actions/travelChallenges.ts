@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/actions/auth";
+import { resolveMerchantScope, scopeAllowsWrite } from "@/lib/actions/scope";
+import { recordActAsChange } from "@/lib/actions/actAs";
 import {
   travelChallengeSchema,
   childChallengeSchema,
@@ -11,9 +13,26 @@ import {
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
+/**
+ * Gate for every quest-content action.
+ *
+ * Returns three things that must not be conflated:
+ *   user       the real signed-in human. Role checks read THIS.
+ *   merchantId the tenancy target - whose content is being read/written.
+ *              Equals user.id normally; the selected merchant while a
+ *              superadmin is acting as one.
+ *   scopeId    the merchant id to filter rows by, or null for unrestricted
+ *              staff. Callers should write `if (gate.scopeId) q.eq(...)`
+ *              rather than testing roles themselves.
+ *
+ * scopeId is null ONLY for staff who are not acting as anyone. A superadmin
+ * who has entered act-as is deliberately NARROWED to that one merchant:
+ * their reach while acting should be the merchant's, not the platform's.
+ */
 async function assertApprovedMerchant() {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Not authenticated" as const };
+  const scope = await resolveMerchantScope();
+  if (!scope) return { error: "Not authenticated" as const };
+  const user = scope.actor;
   const isAdmin = user.role === "admin" || user.role === "superadmin";
   if (!isAdmin) {
     if (user.role !== "merchant") {
@@ -23,7 +42,17 @@ async function assertApprovedMerchant() {
       return { error: "Your merchant account is not approved yet" as const };
     }
   }
-  return { user };
+  // A read-only act-as session may browse but never mutate. Callers that
+  // write check this; readers ignore it.
+  const canWrite = scopeAllowsWrite(scope);
+  return {
+    user,
+    merchantId: scope.merchantId,
+    scopeId: isAdmin && !scope.actingAs ? null : scope.merchantId,
+    actingAs: scope.actingAs,
+    canWrite,
+    scope,
+  };
 }
 
 /**
@@ -58,13 +87,16 @@ async function getApprovedBusiness(userId: string) {
  * for the BIG REWARD slot.
  */
 export async function listMerchantLibraryRewards() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  // Scoped, not actor-keyed: this feeds the reward picker, and the action
+  // that consumes the choice validates it against gate.merchantId. Keyed to
+  // the operator, the picker would offer rewards the write then rejects.
+  const scope = await resolveMerchantScope();
+  if (!scope) return [];
   const supabase = await createClient();
   const { data } = await supabase
     .from("rewards")
     .select("id, title, description, discount_type, discount_value")
-    .eq("merchant_id", user.id)
+    .eq("merchant_id", scope.merchantId)
     .is("challenge_id", null)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
@@ -78,22 +110,31 @@ export async function listMerchantLibraryRewards() {
 }
 
 export async function listMerchantBusinesses() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  // Scoped: createTravelChallenge validates the chosen business against
+  // gate.merchantId, so an actor-keyed picker would list the operator's own
+  // businesses and make creating a quest while acting impossible.
+  const scope = await resolveMerchantScope();
+  if (!scope) return [];
   const supabase = await createClient();
   const { data } = await supabase
     .from("businesses")
     .select("id, name, verification_status")
-    .eq("merchant_id", user.id)
+    .eq("merchant_id", scope.merchantId)
     .order("created_at", { ascending: true });
   return (data ?? []) as { id: string; name: string; verification_status: string }[];
 }
 
 export async function listTravelChallenges() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  const scope = await resolveMerchantScope();
+  if (!scope) return [];
   const supabase = await createClient();
-  const canViewAll = user.role === "admin" || user.role === "superadmin";
+  // Staff normally see every merchant's quests. While ACTING, the list must
+  // NARROW to the target — otherwise the operator browses the whole platform
+  // under a banner that claims one merchant, and can open (and edit) someone
+  // else's quest by mistake.
+  const isStaff =
+    scope.actor.role === "admin" || scope.actor.role === "superadmin";
+  const scopeId = isStaff && !scope.actingAs ? null : scope.merchantId;
   const query = supabase
     .from("travel_challenges")
     .select(
@@ -102,7 +143,7 @@ export async function listTravelChallenges() {
     .neq("status", "deleted")
     .order("created_at", { ascending: false });
 
-  if (!canViewAll) query.eq("merchant_id", user.id);
+  if (scopeId) query.eq("merchant_id", scopeId);
   const { data } = await query;
   return data ?? [];
 }
@@ -137,7 +178,7 @@ export async function createTravelChallenge(input: unknown) {
       .from("businesses")
       .select("id, verification_status")
       .eq("id", selectedBizId)
-      .eq("merchant_id", gate.user.id)
+      .eq("merchant_id", gate.merchantId)
       .maybeSingle();
     if (!pickedBiz) {
       return { error: { _form: ["The selected business doesn't belong to you."] } };
@@ -146,7 +187,7 @@ export async function createTravelChallenge(input: unknown) {
       return { error: { _form: ["The selected business is not verified yet."] } };
     }
   } else {
-    const fallback = await getApprovedBusiness(gate.user.id);
+    const fallback = await getApprovedBusiness(gate.merchantId);
     if (!fallback) {
       return { error: { _form: ["Create a business first before adding quests."] } };
     }
@@ -160,7 +201,7 @@ export async function createTravelChallenge(input: unknown) {
 
   const bigReward = await resolveBigReward({
     supabase,
-    merchantId: gate.user.id,
+    merchantId: gate.merchantId,
     source: parsed.data.big_reward_source,
     libraryRewardId: parsed.data.big_reward_reward_id || null,
     title: parsed.data.big_reward_title || null,
@@ -174,7 +215,7 @@ export async function createTravelChallenge(input: unknown) {
   const { data, error } = await supabase
     .from("travel_challenges")
     .insert({
-      merchant_id: gate.user.id,
+      merchant_id: gate.merchantId,
       business_id: selectedBizId,
       title: parsed.data.title,
       description: parsed.data.description || null,
@@ -193,6 +234,12 @@ export async function createTravelChallenge(input: unknown) {
     .single();
 
   if (error) return { error: { _form: [error.message] } };
+  await recordActAsChange(gate.scope, {
+    action: "createTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: data.id,
+    after: { title: parsed.data.title },
+  });
   revalidatePath("/admin", "layout");
   return { success: true, id: data.id };
 }
@@ -280,7 +327,7 @@ export async function updateTravelChallenge(id: string, input: unknown) {
 
   const bigReward = await resolveBigReward({
     supabase,
-    merchantId: gate.user.id,
+    merchantId: gate.merchantId,
     source: parsed.data.big_reward_source,
     libraryRewardId: parsed.data.big_reward_reward_id || null,
     title: parsed.data.big_reward_title || null,
@@ -310,14 +357,15 @@ export async function updateTravelChallenge(id: string, input: unknown) {
     // Without this a merchant could attach their quest to any other
     // merchant's business by id, bypassing the create-time check. Staff
     // manage the marketplace and may re-point freely.
-    const callerIsStaff =
-      gate.user.role === "admin" || gate.user.role === "superadmin";
-    if (!callerIsStaff) {
+    // Scope, not role: which business a quest may point at is a TENANCY
+    // decision. Keying it to the role let an acting superadmin stamp a
+    // foreign merchant's business onto the quest they were "helping" with.
+    if (gate.scopeId) {
       const { data: biz, error: bizError } = await supabase
         .from("businesses")
         .select("id, verification_status")
         .eq("id", parsed.data.business_id)
-        .eq("merchant_id", gate.user.id)
+        .eq("merchant_id", gate.scopeId)
         .maybeSingle();
       if (bizError) return { error: { _form: [bizError.message] } };
       if (!biz) {
@@ -331,15 +379,29 @@ export async function updateTravelChallenge(id: string, input: unknown) {
   }
   // Ownership is enforced here rather than left to RLS alone: a merchant
   // may only edit their own quest. Staff may act on any row.
-  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
   const query = supabase
     .from("travel_challenges")
     .update(updatePayload)
     .eq("id", id);
-  if (!isStaff) query.eq("merchant_id", gate.user.id);
-  const { error } = await query;
+  if (gate.scopeId) query.eq("merchant_id", gate.scopeId);
+  // `.select()` so a scope-filtered update that matched NOTHING is caught.
+  // PostgREST reports no error for a zero-row update, so without this the
+  // action returned success and wrote an audit entry for a change that never
+  // happened — the worst possible audit failure, a fabricated record.
+  const { data: updated, error } = await query.select("id");
 
   if (error) return { error: { _form: [error.message] } };
+  if (!updated || updated.length === 0) {
+    return {
+      error: { _form: ["Quest not found, or you don't have permission to edit it."] },
+    };
+  }
+  await recordActAsChange(gate.scope, {
+    action: "updateTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: id,
+    after: updatePayload,
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
@@ -367,14 +429,13 @@ export async function submitTravelChallengeForReview(id: string) {
   // Previously the parent update and the child-stop update below both
   // matched by quest id only, so under the permissive staff policies any
   // id sent by the client would have been published.
-  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
   const { data: quest, error: questError } = await supabase
     .from("travel_challenges")
     .select("id, merchant_id")
     .eq("id", id)
     .maybeSingle();
   if (questError) return { error: questError.message };
-  if (!quest || (!isStaff && quest.merchant_id !== gate.user.id)) {
+  if (!quest || (gate.scopeId && quest.merchant_id !== gate.scopeId)) {
     return { error: "Quest not found or not yours." };
   }
 
@@ -403,6 +464,12 @@ export async function submitTravelChallengeForReview(id: string) {
     .update({ status: "live", approved_at: now })
     .eq("travel_challenge_id", id);
 
+  await recordActAsChange(gate.scope, {
+    action: "submitTravelChallengeForReview",
+    entityType: "travel_challenge",
+    entityId: id,
+    after: { status: "live" },
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
@@ -470,7 +537,12 @@ export async function addChildChallenge(
     .eq("id", travelChallengeId)
     .single();
   if (!parent) return { error: { _form: ["Quest not found"] } };
-  if (parent.merchant_id !== gate.user.id && gate.user.role === "merchant") {
+  // Scope, not role. The old form (`&& role === "merchant"`) short-circuited
+  // for staff, so an acting superadmin — whose role is superadmin, not
+  // merchant — could add a stop to a quest owned by a merchant OTHER than the
+  // one they are acting as. The stop was then stamped with the parent's
+  // owner while the audit row named the act-as target, misattributing both.
+  if (gate.scopeId && parent.merchant_id !== gate.scopeId) {
     return { error: { _form: ["You don't own this quest"] } };
   }
 
@@ -550,6 +622,12 @@ export async function addChildChallenge(
   });
 
   if (rwErr) return { error: { _form: [rwErr.message] } };
+  await recordActAsChange(gate.scope, {
+    action: "addChildChallenge",
+    entityType: "challenge",
+    entityId: ch.id,
+    after: { title: parsed.data.title },
+  });
   revalidatePath("/admin", "layout");
   return { success: true, id: ch.id };
 }
@@ -579,8 +657,7 @@ export async function updateChildChallenge(
     .maybeSingle();
   if (!existing) return { error: { _form: ["Challenge not found"] } };
 
-  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
-  if (!isAdmin && existing.merchant_id !== gate.user.id) {
+  if (gate.scopeId && existing.merchant_id !== gate.scopeId) {
     return { error: { _form: ["You don't own this challenge"] } };
   }
   if (!existing.travel_challenge_id) {
@@ -631,6 +708,12 @@ export async function updateChildChallenge(
     .eq("challenge_id", childId);
   if (rwErr) return { error: { _form: [rwErr.message] } };
 
+  await recordActAsChange(gate.scope, {
+    action: "updateChildChallenge",
+    entityType: "challenge",
+    entityId: childId,
+    after: { title: parsed.data.title },
+  });
   revalidatePath("/admin", "layout");
   return { success: true, id: childId };
 }
@@ -655,7 +738,6 @@ export async function deleteTravelChallenge(id: string) {
   }
 
   const supabase = await createClient();
-  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
   // Soft delete: move to the 30-day Trash instead of hard-deleting. Setting
   // status='deleted' also removes it from every traveler-facing query (which
   // filter status='live') without extra filters.
@@ -663,9 +745,14 @@ export async function deleteTravelChallenge(id: string) {
     .from("travel_challenges")
     .update({ status: "deleted", deleted_at: new Date().toISOString() })
     .eq("id", id);
-  if (!isAdmin) upd = upd.eq("merchant_id", gate.user.id);
+  if (gate.scopeId) upd = upd.eq("merchant_id", gate.scopeId);
   const { error } = await upd;
   if (error) return { error: error.message };
+  await recordActAsChange(gate.scope, {
+    action: "deleteTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: id,
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
@@ -674,16 +761,24 @@ export async function restoreTravelChallenge(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
   const supabase = await createClient();
-  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
   // Restore as a draft so the merchant re-publishes (and admins re-review).
   let upd = supabase
     .from("travel_challenges")
     .update({ status: "draft", deleted_at: null })
     .eq("id", id)
     .eq("status", "deleted");
-  if (!isAdmin) upd = upd.eq("merchant_id", gate.user.id);
-  const { error } = await upd;
+  if (gate.scopeId) upd = upd.eq("merchant_id", gate.scopeId);
+  const { data: restored, error } = await upd.select("id");
   if (error) return { error: error.message };
+  if (!restored || restored.length === 0) {
+    return { error: "Quest not found, or you don't have permission to restore it." };
+  }
+  await recordActAsChange(gate.scope, {
+    action: "restoreTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: id,
+    after: { status: "draft" },
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
@@ -692,30 +787,54 @@ export async function purgeTravelChallenge(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
   const supabase = await createClient();
-  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
+
+  // Capture the row BEFORE destroying it. This is a permanent delete that
+  // cascades to the quest's stops, rewards, completions and player progress,
+  // so it is the single most destructive action reachable while acting as a
+  // merchant — and previously the one that left no record at all.
+  const { data: doomed } = await supabase
+    .from("travel_challenges")
+    .select("id, merchant_id, title, status")
+    .eq("id", id)
+    .maybeSingle();
+
   let del = supabase
     .from("travel_challenges")
     .delete()
     .eq("id", id)
     .eq("status", "deleted");
-  if (!isAdmin) del = del.eq("merchant_id", gate.user.id);
-  const { error } = await del;
+  if (gate.scopeId) del = del.eq("merchant_id", gate.scopeId);
+  const { data: purged, error } = await del.select("id");
   if (error) return { error: error.message };
+  if (!purged || purged.length === 0) {
+    return { error: "Quest not found, or you don't have permission to delete it." };
+  }
+  await recordActAsChange(gate.scope, {
+    action: "purgeTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: id,
+    before: doomed ?? undefined,
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
 
 export async function listDeletedTravelChallenges() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  const scope = await resolveMerchantScope();
+  if (!scope) return [];
   const supabase = await createClient();
-  const canViewAll = user.role === "admin" || user.role === "superadmin";
+  // Narrow while acting, same rule as listTravelChallenges — this list feeds
+  // restore and the permanent purge, so showing another merchant's trash here
+  // would be worse than on the main list.
+  const isStaff =
+    scope.actor.role === "admin" || scope.actor.role === "superadmin";
+  const scopeId = isStaff && !scope.actingAs ? null : scope.merchantId;
   const query = supabase
     .from("travel_challenges")
     .select("id, title, description, deleted_at, challenges(count)")
     .eq("status", "deleted")
     .order("deleted_at", { ascending: false });
-  if (!canViewAll) query.eq("merchant_id", user.id);
+  if (scopeId) query.eq("merchant_id", scopeId);
   const { data } = await query;
   return data ?? [];
 }
@@ -739,8 +858,7 @@ export async function saveQuestAsTemplate(
     .maybeSingle();
   if (!quest) return { error: "Quest not found" };
 
-  const isAdmin = gate.user.role === "admin" || gate.user.role === "superadmin";
-  if (!isAdmin && quest.merchant_id !== gate.user.id) {
+  if (gate.scopeId && quest.merchant_id !== gate.scopeId) {
     return { error: "Not your quest" };
   }
 
@@ -800,6 +918,10 @@ export async function saveQuestAsTemplate(
   //    library they can actually see and use.
   // For a merchant acting on their own quest both ids are identical. Staff
   // writing into another owner's library is permitted by migrations 055/056.
+  // "caller" means the human who pressed the button — gate.user.id, NOT
+  // gate.merchantId. While acting, merchantId is the TARGET, so using it here
+  // collapsed both branches onto the same owner and a staff bookmark landed
+  // in the merchant's library where the operator could never see it.
   const templateOwnerId =
     options.fileUnder === "owner" ? quest.merchant_id : gate.user.id;
   const { error } = await supabase.from("quest_templates").insert({
@@ -815,13 +937,15 @@ export async function saveQuestAsTemplate(
 }
 
 export async function listQuestTemplates() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  // Scoped: createQuestFromTemplate instantiates under gate.merchantId, so an
+  // actor-keyed list would offer templates the merchant-scoped write can't use.
+  const scope = await resolveMerchantScope();
+  if (!scope) return [];
   const supabase = await createClient();
   const { data } = await supabase
     .from("quest_templates")
     .select("id, title, description, stop_count, created_at")
-    .eq("merchant_id", user.id)
+    .eq("merchant_id", scope.merchantId)
     .order("created_at", { ascending: false });
   return data ?? [];
 }
@@ -830,12 +954,21 @@ export async function deleteQuestTemplate(id: string) {
   const gate = await assertApprovedMerchant();
   if ("error" in gate) return { error: gate.error };
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("quest_templates")
     .delete()
     .eq("id", id)
-    .eq("merchant_id", gate.user.id);
+    .eq("merchant_id", gate.merchantId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!removed || removed.length === 0) {
+    return { error: "Template not found, or you don't have permission to delete it." };
+  }
+  await recordActAsChange(gate.scope, {
+    action: "deleteQuestTemplate",
+    entityType: "quest_template",
+    entityId: id,
+  });
   revalidatePath("/admin", "layout");
   return { success: true };
 }
@@ -849,7 +982,7 @@ export async function createQuestFromTemplate(templateId: string) {
     .from("quest_templates")
     .select("snapshot")
     .eq("id", templateId)
-    .eq("merchant_id", gate.user.id)
+    .eq("merchant_id", gate.merchantId)
     .maybeSingle();
   if (!tpl) return { error: { _form: ["Template not found"] } };
 
@@ -858,14 +991,14 @@ export async function createQuestFromTemplate(templateId: string) {
     stops: Record<string, unknown>[];
   };
 
-  const biz = await getApprovedBusiness(gate.user.id);
+  const biz = await getApprovedBusiness(gate.merchantId);
   if (!biz) return { error: { _form: ["Create a business first."] } };
 
   const q = snapshot.quest ?? {};
   const { data: quest, error: qErr } = await supabase
     .from("travel_challenges")
     .insert({
-      merchant_id: gate.user.id,
+      merchant_id: gate.merchantId,
       business_id: biz.id,
       title: `${(q.title as string) ?? "Untitled quest"} (copy)`,
       description: (q.description as string | null) ?? null,
@@ -887,7 +1020,7 @@ export async function createQuestFromTemplate(templateId: string) {
     const { data: ch } = await supabase
       .from("challenges")
       .insert({
-        merchant_id: gate.user.id,
+        merchant_id: gate.merchantId,
         travel_challenge_id: quest.id,
         title: (s.title as string) ?? "Stop",
         description: (s.description as string) ?? "",
@@ -917,7 +1050,7 @@ export async function createQuestFromTemplate(templateId: string) {
     if (reward) {
       await supabase.from("rewards").insert({
         challenge_id: ch.id,
-        merchant_id: gate.user.id,
+        merchant_id: gate.merchantId,
         title: (reward.title as string) ?? "Reward",
         description: (reward.description as string | null) ?? null,
         discount_type: (reward.discount_type as string) ?? "freebie",
@@ -927,6 +1060,16 @@ export async function createQuestFromTemplate(templateId: string) {
     }
   }
 
+  await recordActAsChange(gate.scope, {
+    action: "createQuestFromTemplate",
+    entityType: "travel_challenge",
+    entityId: quest.id as string,
+    after: {
+      title: snapshot.quest?.title ?? null,
+      stops: (snapshot.stops ?? []).length,
+      from_template: templateId,
+    },
+  });
   revalidatePath("/admin", "layout");
   return { success: true, id: quest.id as string };
 }
@@ -938,14 +1081,30 @@ export async function removeChildChallenge(childId: string) {
   // Ownership is enforced here rather than left to RLS alone: this was a
   // bare delete by id, so under the permissive staff policies any child
   // id sent by the client would have been removed.
-  const isStaff = gate.user.role === "admin" || gate.user.role === "superadmin";
+  // Capture before destroying, so the audit says WHAT was removed rather
+  // than just that something was.
+  const { data: doomed } = await supabase
+    .from("challenges")
+    .select("id, merchant_id, title, travel_challenge_id")
+    .eq("id", childId)
+    .maybeSingle();
+
   const query = supabase
     .from("challenges")
     .delete()
     .eq("id", childId);
-  if (!isStaff) query.eq("merchant_id", gate.user.id);
-  const { error } = await query;
+  if (gate.scopeId) query.eq("merchant_id", gate.scopeId);
+  const { data: removed, error } = await query.select("id");
   if (error) return { error: error.message };
+  if (!removed || removed.length === 0) {
+    return { error: "Stop not found, or you don't have permission to remove it." };
+  }
+  await recordActAsChange(gate.scope, {
+    action: "removeChildChallenge",
+    entityType: "challenge",
+    entityId: childId,
+    before: doomed ?? undefined,
+  });
   return { success: true };
 }
 
@@ -964,7 +1123,7 @@ export async function uploadTravelChallengeCover(formData: FormData) {
   // cache-control is now a year (immutable), and reusing the same URL
   // for new bytes would serve the old image until eviction.
   const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
-  const path = `travel-challenges/${gate.user.id}/${randomUUID()}.${ext}`;
+  const path = `travel-challenges/${gate.merchantId}/${randomUUID()}.${ext}`;
 
   const admin = createAdminClient();
   const buffer = Buffer.from(await file.arrayBuffer());
