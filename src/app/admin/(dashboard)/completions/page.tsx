@@ -32,11 +32,25 @@ export default function CompletionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [codeInput, setCodeInput] = useState("");
   const [pending, startTransition] = useTransition();
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const PAGE_SIZE = 50;
 
   async function reload() {
     setIsLoading(true);
-    setRows(await listPendingCompletions());
+    const first = await listPendingCompletions(PAGE_SIZE, 0);
+    setRows(first);
+    setHasMore(first.length === PAGE_SIZE);
     setIsLoading(false);
+  }
+
+  async function loadMore() {
+    setLoadingMore(true);
+    const next = await listPendingCompletions(PAGE_SIZE, rows.length);
+    setRows((prev) => [...prev, ...next]);
+    setHasMore(next.length === PAGE_SIZE);
+    setLoadingMore(false);
   }
 
   useEffect(() => {
@@ -50,7 +64,7 @@ export default function CompletionsPage() {
       const r = await verifyCompletion(id);
       if ("error" in r) toast.error(r.error as string);
       else {
-        toast.success("Verified ? reward released");
+        toast.success("Verified — reward released");
         await reload();
       }
     });
@@ -63,7 +77,7 @@ export default function CompletionsPage() {
       const r = await rejectCompletion(id, reason);
       if ("error" in r) toast.error(r.error as string);
       else {
-        toast.success("Rejected");
+        toast.error("Rejected");
         await reload();
       }
     });
@@ -117,7 +131,7 @@ export default function CompletionsPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
-          Pending ? {pendingRows.length}
+          Pending · {pendingRows.length}
         </h2>
         <div className="space-y-3">
           {pendingRows.length === 0 && (
@@ -128,41 +142,65 @@ export default function CompletionsPage() {
             const ch = rec.challenges as Record<string, unknown> | null;
             const rewards = (ch?.rewards as Record<string, unknown>[]) ?? [];
             const reward = rewards[0];
+            const proofUrl = rec.proof_url as string | null;
+            const hasGps = rec.gps_latitude != null;
             return (
               <Card
                 key={rec.id as string}
                 className="bg-zinc-900 border-zinc-800"
               >
                 <CardContent className="pt-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">
-                          {(ch?.title as string) ?? "Challenge"}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={STATUS_CLASS.pending}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      {proofUrl ? (
+                        <a
+                          href={proofUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0"
+                          title="Open full photo"
                         >
-                          pending
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        Code:{" "}
-                        <span className="font-mono text-zinc-200">
-                          {(rec.verification_code as string) ?? "--"}
-                        </span>
-                      </p>
-                      {reward && (
-                        <p className="text-xs text-zinc-500 mt-1">
-                          Reward: {reward.title as string} (
-                          {reward.discount_type as string}
-                          {reward.discount_value
-                            ? ` ${reward.discount_value}`
-                            : ""}
-                          )
-                        </p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={proofUrl}
+                            alt="Proof photo"
+                            className="h-20 w-20 rounded-lg border border-zinc-700 object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800 px-1 text-center text-[10px] text-zinc-500">
+                          {hasGps ? "GPS check-in" : "No photo"}
+                        </div>
                       )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">
+                            {(ch?.title as string) ?? "Challenge"}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={STATUS_CLASS.pending}
+                          >
+                            pending
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Code:{" "}
+                          <span className="font-mono text-zinc-200">
+                            {(rec.verification_code as string) ?? "--"}
+                          </span>
+                        </p>
+                        {reward && (
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Reward: {reward.title as string} (
+                            {reward.discount_type as string}
+                            {reward.discount_value
+                              ? ` ${reward.discount_value}`
+                              : ""}
+                            )
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -217,6 +255,19 @@ export default function CompletionsPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            disabled={loadingMore}
+            onClick={loadMore}
+            className="border-zinc-700 text-zinc-200"
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </Button>
         </div>
       )}
     </div>

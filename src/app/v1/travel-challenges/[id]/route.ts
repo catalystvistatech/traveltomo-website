@@ -3,6 +3,7 @@ import { createApiClient, requireUser } from "@/lib/supabase/api";
 import {
   buildTravelProgressPayload,
   derivePlayerStopStatus,
+  globalSkipStatus,
   loadActiveTravelProgress,
   loadStopCompletionsForTravelChallenge,
 } from "@/lib/challenge-progress";
@@ -43,14 +44,24 @@ export async function GET(request: Request, { params }: Params) {
     .single();
 
   if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.code === "PGRST116" ? 404 : 500 }
-    );
+    // PGRST116 = zero rows from .single(): the quest doesn't exist or is no
+    // longer visible under RLS (expired / paused / deleted). Surface a human
+    // message — the raw "Cannot coerce the result to a single JSON object"
+    // leaked straight into the iOS error alert.
+    if (error.code === "PGRST116") {
+      return NextResponse.json(
+        { error: "This quest is no longer available." },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "This quest is no longer available." },
+      { status: 404 }
+    );
   }
 
   type ChildRow = {
@@ -160,6 +171,7 @@ export async function GET(request: Request, { params }: Params) {
         duration_minutes: c.duration_minutes,
         latitude: lat,
         longitude: lng,
+        place_id: c.place?.id ?? null,
         place_name: c.place?.name ?? row.business?.name ?? c.title,
         place_image_url: c.place?.image_url ?? null,
         reward_title: reward?.title ?? null,
@@ -171,6 +183,25 @@ export async function GET(request: Request, { params }: Params) {
       };
     })
     .filter((c) => c.latitude != null && c.longitude != null);
+
+  // Skips are one GLOBAL 3h-recharging pool (not per-quest), so the
+  // progress payload reports the pool state — this is what seeds the
+  // map's "skips left" pill.
+  let progressPayload = auth.user
+    ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
+    : null;
+  if (auth.user && progressPayload) {
+    try {
+      const pool = await globalSkipStatus(auth.client, auth.user.id);
+      progressPayload = {
+        ...progressPayload,
+        skips_used: pool.skips_used,
+        skips_limit: pool.skips_limit,
+      };
+    } catch {
+      // Pool lookup is display-only; keep the payload on failure.
+    }
+  }
 
   return NextResponse.json({
     data: {
@@ -190,10 +221,14 @@ export async function GET(request: Request, { params }: Params) {
       business_latitude: businessLat,
       business_longitude: businessLng,
       establishment_type: row.business?.establishment_type ?? null,
-      progress: auth.user
-        ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
-        : null,
+      progress: progressPayload,
       children,
     },
+  }, {
+    // The body carries per-user `progress` + per-stop `player_status`,
+    // so we can't share it across users. Private cache lets the iOS
+    // URLCache absorb the quest-preview re-opens that fire during
+    // navigation between Home and the map.
+    headers: { "Cache-Control": "private, max-age=20" },
   });
 }

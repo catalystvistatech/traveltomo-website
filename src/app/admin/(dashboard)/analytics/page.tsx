@@ -128,7 +128,7 @@ export default async function AnalyticsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Analytics</h1>
           <p className="text-zinc-400 mt-1">
-            Last {WINDOW_DAYS} days of activity on your travel challenges.
+            Last {WINDOW_DAYS} days of activity on your quests.
           </p>
         </div>
         <Link href="/admin/claims">

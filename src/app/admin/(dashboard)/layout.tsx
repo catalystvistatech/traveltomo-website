@@ -8,6 +8,8 @@ import {
 } from "@/lib/actions/auth";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
+import { ActAsBanner } from "@/components/dashboard/act-as-banner";
+import { resolveMerchantScope } from "@/lib/actions/scope";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,15 +28,35 @@ export default async function DashboardLayout({
     return <AccessDeniedScreen user={user} />;
   }
 
+  // Resolved server-side on every render, so the banner cannot disagree with
+  // the scope the actions actually use.
+  const scope = await resolveMerchantScope();
+  const actingAs = scope?.actingAs ?? null;
+
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
       <SidebarInset>
+        {actingAs && (
+          <ActAsBanner
+            merchantName={actingAs.displayName}
+            expiresAt={actingAs.expiresAt}
+          />
+        )}
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-4">
           <SidebarTrigger className="text-zinc-400 hover:text-white" />
           <Separator orientation="vertical" className="h-4 bg-zinc-700" />
           <div className="flex-1" />
-          <Badge variant="outline" className="border-zinc-700 text-zinc-400 text-xs">{user.role}</Badge>
+          <Badge
+            variant="outline"
+            className={
+              actingAs
+                ? "border-amber-600 text-amber-300 text-xs"
+                : "border-zinc-700 text-zinc-400 text-xs"
+            }
+          >
+            {actingAs ? `acting as merchant` : user.role}
+          </Badge>
         </header>
         <main className="flex-1 bg-zinc-950 p-6">{children}</main>
       </SidebarInset>

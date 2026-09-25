@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   const { data: completion, error: fetchError } = await admin
     .from("challenge_completions")
     .select(
-      `id, user_id, challenge_id, verification_status, travel_challenge_progress_id,
+      `id, user_id, challenge_id, verification_status, completed_at, travel_challenge_progress_id,
        challenge:challenges!inner ( id, title, merchant_id, travel_challenge_id )`
     )
     .eq("verification_code", code)
@@ -107,6 +107,12 @@ export async function POST(request: Request) {
     reward_released: !isReject,
     rejection_reason: isReject ? reason : null,
     player_status: isReject ? "forfeited" : "claimed",
+    // Close out the stop so it's no longer treated as in-flight by the
+    // accept route (which keys off completed_at IS NULL). Preserve an
+    // existing submission time if the player already submitted proof.
+    completed_at:
+      (completion as { completed_at?: string | null }).completed_at ??
+      new Date().toISOString(),
   };
 
   const { error: updateError } = await admin

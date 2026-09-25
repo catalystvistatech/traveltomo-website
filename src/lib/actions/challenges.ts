@@ -140,9 +140,16 @@ export async function submitChallengeForReview(challengeId: string) {
   // lands in `pending_review` for an admin to approve via
   // `reviewChallenge()`.
   const user = await getCurrentUser();
-  const bypass = user?.role === "superadmin";
+  if (!user) return { error: "Not authenticated" };
+  const isStaff = user.role === "admin" || user.role === "superadmin";
+  const bypass = user.role === "superadmin";
 
-  const { error } = await supabase
+  // Ownership is enforced here rather than left to RLS alone: a merchant
+  // may only submit their own challenges. Staff manage the marketplace and
+  // may act on any row. Without this predicate the update matched by `id`
+  // alone, so under the permissive staff policies any id sent by the
+  // client would have been accepted.
+  const query = supabase
     .from("challenges")
     .update({
       status: bypass ? "live" : "pending_review",
@@ -150,6 +157,8 @@ export async function submitChallengeForReview(challengeId: string) {
       ...(bypass ? { approved_at: now } : {}),
     })
     .eq("id", challengeId);
+  if (!isStaff) query.eq("merchant_id", user.id);
+  const { error } = await query;
 
   if (error) return { error: error.message };
 
@@ -175,6 +184,16 @@ export async function reviewChallenge(
   action: "approved" | "rejected",
   notes?: string
 ) {
+  // Staff-only. This action writes with the service-role client (RLS
+  // bypassed), and as an exported server action its reference ID ships in
+  // the client bundle, so it is callable by anyone who can reach the site.
+  // Without this gate any account could publish or reject any challenge.
+  // Mirrors reviewTravelChallenge / reviewBusiness.
+  const user = await getCurrentUser();
+  if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
+    return { error: "Only admins/superadmins can review" };
+  }
+
   const adminClient = createAdminClient();
 
   const updateData: Record<string, unknown> = {

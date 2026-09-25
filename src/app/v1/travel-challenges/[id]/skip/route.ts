@@ -1,41 +1,33 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
-import { ensureTravelChallengeProgress } from "@/lib/challenge-progress";
+import { consumeGlobalSkip } from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
  * POST /v1/travel-challenges/:id/skip
  *
- * Consumes one of the player's per-quest free skips. Each travel-
- * challenge set gives the user a fixed budget (`skips_limit`, currently
- * 3); after that we return `requires_ad=true` and the client switches
- * to the non-intrusive side-ad surface.
+ * Consumes one skip from the player's GLOBAL pool (3 skips, refilled
+ * every 3 hours, shared across every quest and challenge — unlimited for
+ * subscribers). Quests no longer carry their own separate budget; the
+ * response keeps the legacy per-quest shape so older builds still decode:
  *
- * Returns:
  *   {
  *     consumed: bool,
- *     requires_ad: bool,
- *     skips_used: number,
- *     skips_limit: number
+ *     requires_ad: bool,   // pool empty — client gates the action on an ad
+ *     skips_used: number,  // of the 3-skip window
+ *     skips_limit: number  // always 3
  *   }
  */
 export async function POST(request: Request, { params }: Params) {
-  const { id } = await params;
+  await params; // id unused: the pool is global, not per-quest
   const { user, client, error } = await requireUser(request);
   if (error || !user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
   try {
-    const progress = await ensureTravelChallengeProgress(client, user.id, id);
-    const { data, error: rpcError } = await client.rpc("consume_quest_skip", {
-      p_user: user.id,
-      p_progress_id: progress.id,
-    });
-    if (rpcError) {
-      return NextResponse.json({ error: rpcError.message }, { status: 500 });
-    }
+    const data = await consumeGlobalSkip(client, user.id);
     return NextResponse.json({ data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "skip failed";

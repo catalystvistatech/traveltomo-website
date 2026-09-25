@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavLogo } from "@/components/landing/nav-logo";
 
 const RED = "#D12D34";
 const SALMON = "#FCA581";
@@ -38,9 +39,7 @@ function Nav() {
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.svg" alt="TravelTomo" width={120} height={32} className="h-8 w-auto" />
-        </Link>
+        <NavLogo />
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <a href="#how-it-works" className="hover:text-white transition-colors">
             How It Works
@@ -55,12 +54,14 @@ function Nav() {
             Dashboard
           </Link>
         </div>
-        <Button
-          className="text-sm rounded-full px-5 text-white"
-          style={{ backgroundColor: RED }}
-        >
-          Download App
-        </Button>
+        <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+          <Button
+            className="text-sm rounded-full px-5 text-white"
+            style={{ backgroundColor: RED }}
+          >
+            Download App
+          </Button>
+        </a>
       </div>
     </nav>
   );
@@ -104,14 +105,16 @@ function Hero() {
             </p>
 
             <div className="flex items-center gap-4">
-              <Button
-                size="lg"
-                className="text-sm font-semibold rounded-full px-6 h-11 text-white"
-                style={{ backgroundColor: RED }}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Download for iOS
-              </Button>
+              <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+                <Button
+                  size="lg"
+                  className="text-sm font-semibold rounded-full px-6 h-11 text-white"
+                  style={{ backgroundColor: RED }}
+                >
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  Download for iOS
+                </Button>
+              </a>
               <span className="text-sm text-zinc-500">Available on Android Soon</span>
             </div>
           </div>
@@ -390,14 +393,16 @@ function CTA() {
           Currently available in Angeles City, Pampanga.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button
-            size="lg"
-            className="text-sm font-semibold rounded-full px-8 h-12 text-white"
-            style={{ backgroundColor: RED }}
-          >
-            <Smartphone className="h-4 w-4 mr-2" />
-            Download on iOS
-          </Button>
+          <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              className="text-sm font-semibold rounded-full px-8 h-12 text-white"
+              style={{ backgroundColor: RED }}
+            >
+              <Smartphone className="h-4 w-4 mr-2" />
+              Download on iOS
+            </Button>
+          </a>
           <Link href="/admin/register">
             <Button
               size="lg"
@@ -425,7 +430,9 @@ function Footer() {
           <p className="text-zinc-500 text-sm italic">
             Explore. Play. Earn. Repeat.
           </p>
-          <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          <Link href="/" aria-label="TravelTomo home" className="inline-flex">
+            <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          </Link>
 
           {/* Links */}
           <div className="flex items-center gap-6 text-sm text-zinc-500">
@@ -436,11 +443,14 @@ function Footer() {
               Terms
             </a>
             <a
-              href="mailto:hello@traveltomo.app"
+              href="mailto:info@traveltomo.app"
               className="hover:text-white transition-colors"
             >
               Contact
             </a>
+            <Link href="/help" className="hover:text-white transition-colors">
+              Help
+            </Link>
             <Link
               href="/admin/login"
               className="hover:text-white transition-colors"

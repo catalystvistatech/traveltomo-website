@@ -42,6 +42,10 @@ import {
   type BusinessLocationValue,
 } from "@/components/business-location-picker";
 import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Store, Lock, Clock } from "lucide-react";
+import {
+  MIN_SERVICE_RADIUS_M,
+  MAX_SERVICE_RADIUS_M,
+} from "@/lib/constants/service-radius";
 
 const DAYS: (keyof BusinessHoursInput)[] = [
   "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
@@ -204,12 +208,20 @@ function BusinessForm({
           <Label className="text-zinc-300">Service Radius (m)</Label>
           <Input
             type="number"
+            min={MIN_SERVICE_RADIUS_M}
+            max={MAX_SERVICE_RADIUS_M}
+            step={100}
             value={form.service_radius_meters}
             onChange={(e) =>
               setForm({ ...form, service_radius_meters: parseInt(e.target.value || "0") })
             }
             className="bg-zinc-800 border-zinc-700 text-white"
           />
+          <p className="text-xs text-zinc-500">
+            How far away travelers can be and still see your quests. Minimum{" "}
+            {MIN_SERVICE_RADIUS_M}m — anything smaller and almost no one would
+            ever find you.
+          </p>
         </div>
       </div>
 

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /v1/me/active-challenge
  *
- * Returns the caller's most recent in-progress challenge  a
+ * Returns the caller's most recent in-progress challenge ï¿½ a
  * `challenge_completions` row that has been accepted (status `pending`)
  * but not yet verified (`completed_at IS NULL`). The response includes
  * enough info for the iOS app to render a "Continue Challenge" banner
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  // `challenges` has no direct FK to `businesses`  only `merchant_id ->
+  // `challenges` has no direct FK to `businesses` ï¿½ only `merchant_id ->
   // profiles.id`. We embed every relation PostgREST CAN discover, then
   // resolve the merchant's business in a second query below.
   const { data, error: queryError } = await client
@@ -49,16 +49,19 @@ export async function GET(request: Request) {
     .limit(1)
     .maybeSingle();
 
+  // Private cache for both the empty and populated responses so the
+  // iOS URLCache short-circuits Home's per-appear refresh storms.
+  const cacheHeaders = { "Cache-Control": "private, max-age=15" };
+
   if (queryError) {
-    // PGRST116 = no rows; treat as "no active challenge" rather than 500.
     if (queryError.code === "PGRST116") {
-      return NextResponse.json({ data: null });
+      return NextResponse.json({ data: null }, { headers: cacheHeaders });
     }
     return NextResponse.json({ error: queryError.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ data: null });
+    return NextResponse.json({ data: null }, { headers: cacheHeaders });
   }
 
   type Row = {
@@ -97,7 +100,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: null });
   }
 
-  // Resolve the merchant's business — used as the final coordinate
+  // Resolve the merchant's business ï¿½ used as the final coordinate
   // fallback when the challenge doesn't carry its own pin and the
   // linked place is null. Public read on `businesses` is allowed by
   // migration 014 (traveler_read_businesses).
@@ -148,5 +151,5 @@ export async function GET(request: Request) {
           }
         : null,
     },
-  });
+  }, { headers: cacheHeaders });
 }

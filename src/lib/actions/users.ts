@@ -1,11 +1,16 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, type UserRole } from "@/lib/actions/auth";
+import { getCurrentUser } from "@/lib/actions/auth";
+import type { UserRole } from "@/lib/actions/auth";
 import { revalidatePath } from "next/cache";
 
-export type { UserRole };
+// NOTE: Do NOT re-export `UserRole` here. This is a "use server" module;
+// re-exporting an imported type (`export type { UserRole }`) made Turbopack
+// emit a runtime `export { UserRole }` against an erased binding, crashing
+// the whole actions module at evaluation ("ReferenceError: UserRole is not
+// defined") and 500ing every action on the Users page. Consumers import
+// the type straight from "@/lib/actions/auth" instead.
 
 export interface ManagedUser {
   id: string;
@@ -38,33 +43,50 @@ export async function listUsers({
   role?: string;
   page?: number;
   pageSize?: number;
-} = {}): Promise<{ users: ManagedUser[]; total: number }> {
-  await requireAdmin();
-  const admin = createAdminClient();
+} = {}): Promise<{ users: ManagedUser[]; total: number; error?: string }> {
+  // The ENTIRE body is wrapped: a thrown server-action error is masked in
+  // production as a generic "Server Components render" message, hiding the
+  // real cause (auth, a missing service-role env var, or a query failure).
+  // Returning the message instead surfaces it in the page's toast.
+  try {
+    const me = await getCurrentUser();
+    if (!me || (me.role !== "admin" && me.role !== "superadmin")) {
+      return { users: [], total: 0, error: "Unauthorized" };
+    }
 
-  let query = admin
-    .from("profiles")
-    .select(
-      "id, email, display_name, avatar_url, role, merchant_request_status, banned_at, ban_reason, xp, created_at",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
+    const admin = createAdminClient();
 
-  if (role) {
-    query = query.eq("role", role);
+    let query = admin
+      .from("profiles")
+      .select(
+        "id, email, display_name, avatar_url, role, merchant_request_status, banned_at, ban_reason, xp, created_at",
+        { count: "exact" }
+      )
+      .order("created_at", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+
+    if (role) {
+      query = query.eq("role", role);
+    }
+
+    if (search.trim()) {
+      query = query.or(
+        `email.ilike.%${search.trim()}%,display_name.ilike.%${search.trim()}%`
+      );
+    }
+
+    const { data, count, error } = await query;
+    if (error) {
+      console.error("[listUsers] query error:", error.message);
+      return { users: [], total: 0, error: `Could not load users: ${error.message}` };
+    }
+
+    return { users: (data ?? []) as ManagedUser[], total: count ?? 0 };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[listUsers] threw:", msg);
+    return { users: [], total: 0, error: `Could not load users: ${msg}` };
   }
-
-  if (search.trim()) {
-    query = query.or(
-      `email.ilike.%${search.trim()}%,display_name.ilike.%${search.trim()}%`
-    );
-  }
-
-  const { data, count, error } = await query;
-  if (error) throw new Error(error.message);
-
-  return { users: (data ?? []) as ManagedUser[], total: count ?? 0 };
 }
 
 export async function updateUserRole(userId: string, role: UserRole) {

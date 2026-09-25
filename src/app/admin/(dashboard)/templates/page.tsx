@@ -38,7 +38,7 @@ const empty = {
   establishment_type: undefined as EstablishmentType | undefined,
   suggested_xp: 50,
   suggested_radius_meters: 50,
-  verification_type: "gps" as "gps" | "qr_scan" | "photo_upload" | "quiz_answer",
+  verification_type: "photo_upload" as "gps" | "qr_scan" | "photo_upload" | "quiz_answer",
   cover_url: "",
   is_published: true,
 };
@@ -125,7 +125,7 @@ export default function TemplatesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Challenge Templates</h1>
           <p className="text-zinc-400 mt-1">
-            Reusable challenges merchants can clone into their own Travel Challenges.
+            Reusable challenges merchants can clone into their own Quests.
           </p>
         </div>
         <Button
