@@ -139,7 +139,27 @@ export default function TravelChallengesPage() {
 
   useEffect(() => {
     reload();
+    // The wizard links here with ?advanced=1 when it can't find enough
+    // nearby places; open the full form straight away in that case.
+    if (new URLSearchParams(window.location.search).get("advanced") === "1") {
+      openAdvancedForm();
+    }
   }, []);
+
+  function openAdvancedForm() {
+    setShowNew((v) => !v);
+    // Sensible default window so the merchant doesn't have to pick
+    // dates at all: today → 30 days. Left alone if already set.
+    setForm((f) =>
+      f.date_range_start || f.date_range_end
+        ? f
+        : {
+            ...f,
+            date_range_start: isoDate(new Date()),
+            date_range_end: isoDate(new Date(Date.now() + 30 * 86_400_000)),
+          },
+    );
+  }
 
   if (isLoading) return <PageSkeleton variant="list" />;
 
@@ -266,25 +286,21 @@ export default function TravelChallengesPage() {
             to visit. Name it, then pick the places.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setShowNew((v) => !v);
-            // Sensible default window so the merchant doesn't have to pick
-            // dates at all: today → 30 days. Left alone if already set.
-            setForm((f) =>
-              f.date_range_start || f.date_range_end
-                ? f
-                : {
-                    ...f,
-                    date_range_start: isoDate(new Date()),
-                    date_range_end: isoDate(new Date(Date.now() + 30 * 86_400_000)),
-                  },
-            );
-          }}
-          className="bg-red-600 hover:bg-red-700 text-white gap-2"
-        >
-          <Plus className="h-4 w-4" /> New Quest
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={openAdvancedForm}
+            className="border-zinc-700 text-zinc-300"
+          >
+            Advanced
+          </Button>
+          <Button
+            onClick={() => router.push("/admin/travel-challenges/new")}
+            className="bg-red-600 hover:bg-red-700 text-white gap-2"
+          >
+            <Plus className="h-4 w-4" /> New Quest
+          </Button>
+        </div>
       </div>
 
       {showNew && (
