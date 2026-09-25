@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   listTravelChallenges,
   createTravelChallenge,
@@ -38,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, ImagePlus, X, Trash2, BookmarkPlus, RotateCcw } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
 
@@ -59,7 +61,33 @@ type LibraryReward = {
   discount_value: number | null;
 };
 
+/** yyyy-mm-dd for <input type="date">, in local time. */
+function isoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Plain-English summary of the date range, e.g. "Runs Sep 26 → Oct 26
+ * (30 days)". The native date input renders in the browser's locale
+ * (mm/dd/yyyy on US-English machines), which is easy to misread in the
+ * Philippines, so the chosen range is echoed back unambiguously.
+ */
+function describeRange(start: string, end: string): string {
+  const fmt = (v: string) =>
+    new Date(`${v}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  if (!start && !end) return "No dates set — the quest runs until you pause it.";
+  if (start && !end) return `Starts ${fmt(start)}, no end date.`;
+  if (!start && end) return `Ends ${fmt(end)}.`;
+  const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
+  if (days < 0) return "The end date is before the start date.";
+  return `Runs ${fmt(start)} → ${fmt(end)} (${days} day${days === 1 ? "" : "s"}).`;
+}
+
 export default function TravelChallengesPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [businesses, setBusinesses] = useState<{ id: string; name: string; verification_status: string }[]>([]);
   const [libraryRewards, setLibraryRewards] = useState<LibraryReward[]>([]);
@@ -161,9 +189,14 @@ export default function TravelChallengesPage() {
       toast.error(formatActionError(r.error as Record<string, unknown>));
       return;
     }
-    toast.success("Quest created");
+    // Straight to adding stops: a quest can't go live until it has
+    // TRAVEL_CHALLENGE_STOP_COUNT of them, and dropping the merchant back on
+    // the list left them to work out that next step on their own.
+    toast.success(`Quest created — now add ${TRAVEL_CHALLENGE_STOP_COUNT} stops`);
     setShowNew(false);
-    await reload();
+    const newId = (r as { id?: string }).id;
+    if (newId) router.push(`/admin/travel-challenges/${newId}`);
+    else await reload();
   }
 
   async function handleDelete(id: string, title: string) {
@@ -229,12 +262,25 @@ export default function TravelChallengesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Quests</h1>
           <p className="text-zinc-400 mt-1">
-            Bundle multiple challenges into a set. Complete any or all; merchants
-            set the big-reward bonus.
+            A quest is a set of {TRAVEL_CHALLENGE_STOP_COUNT} places for travelers
+            to visit. Name it, then pick the places.
           </p>
         </div>
         <Button
-          onClick={() => setShowNew((v) => !v)}
+          onClick={() => {
+            setShowNew((v) => !v);
+            // Sensible default window so the merchant doesn't have to pick
+            // dates at all: today → 30 days. Left alone if already set.
+            setForm((f) =>
+              f.date_range_start || f.date_range_end
+                ? f
+                : {
+                    ...f,
+                    date_range_start: isoDate(new Date()),
+                    date_range_end: isoDate(new Date(Date.now() + 30 * 86_400_000)),
+                  },
+            );
+          }}
           className="bg-red-600 hover:bg-red-700 text-white gap-2"
         >
           <Plus className="h-4 w-4" /> New Quest
@@ -328,32 +374,39 @@ export default function TravelChallengesPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-zinc-500">Challenge stops must fall within this business's service radius.</p>
+                <p className="text-xs text-zinc-500">Stops must be within this business&apos;s service area.</p>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Completion Mode</Label>
-                <Select
-                  value={form.completion_mode}
-                  onValueChange={(v: string | null) =>
-                    v &&
-                    setForm({
-                      ...form,
-                      completion_mode: v as "any" | "all",
-                    })
-                  }
-                >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Any — complete 1</SelectItem>
-                    <SelectItem value="all">All — complete every stop</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">How do travelers win?</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([
+                  { value: "any", title: "Visit any stop", hint: "Each stop gives its own reward." },
+                  { value: "all", title: "Visit every stop", hint: "Finishing all of them unlocks a big reward." },
+                ] as const).map((opt) => {
+                  const active = form.completion_mode === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, completion_mode: opt.value })}
+                      aria-pressed={active}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        active
+                          ? "border-red-600 bg-red-600/10"
+                          : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-white">{opt.title}</p>
+                      <p className="text-xs text-zinc-400 mt-0.5">{opt.hint}</p>
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Start Date</Label>
                 <Input
@@ -377,9 +430,12 @@ export default function TravelChallengesPage() {
                 />
               </div>
             </div>
+            <p className="text-xs text-zinc-500 -mt-2">
+              {describeRange(form.date_range_start, form.date_range_end)}
+            </p>
             <div className="space-y-2">
               <Label className="text-zinc-300">
-                Max total completions (optional)
+                Limit how many travelers can win (optional)
               </Label>
               <Input
                 type="number"
@@ -387,15 +443,20 @@ export default function TravelChallengesPage() {
                 onChange={(e) =>
                   setForm({ ...form, max_total_completions: e.target.value })
                 }
-                placeholder="e.g. 100 ? closes after that many redemptions"
+                placeholder="Leave empty for no limit — e.g. 100 closes the quest after 100 winners"
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
+            {/* The big reward only exists for "visit every stop" quests, so it
+                is hidden otherwise instead of asking the merchant to fill in a
+                section that cannot apply. */}
+            {form.completion_mode === "all" && (
             <div className="pt-2 border-t border-zinc-800 space-y-3">
               <h3 className="text-sm font-semibold text-white">
-                Big Reward (if completion mode = All)
+                Big reward for finishing every stop
               </h3>
 
+              {libraryRewards.length > 0 && (
               <div className="inline-flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5 text-xs">
                 {(["library", "custom"] as const).map((mode) => {
                   const active = form.big_reward_source === mode;
@@ -419,6 +480,7 @@ export default function TravelChallengesPage() {
                   );
                 })}
               </div>
+              )}
 
               {form.big_reward_source === "library" ? (
                 libraryRewards.length === 0 ? (
@@ -552,13 +614,14 @@ export default function TravelChallengesPage() {
                 </>
               )}
             </div>
-            <div className="flex gap-2 pt-3">
+            )}
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-800">
               <Button
                 onClick={handleCreate}
                 disabled={saving}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                {saving ? "Creating..." : "Create"}
+                {saving ? "Creating..." : "Create & add stops →"}
               </Button>
               <Button
                 variant="ghost"
@@ -567,6 +630,10 @@ export default function TravelChallengesPage() {
               >
                 Cancel
               </Button>
+              <p className="text-xs text-zinc-500 w-full sm:w-auto sm:ml-auto">
+                Next: pick {TRAVEL_CHALLENGE_STOP_COUNT} places. The quest goes live once it has all{" "}
+                {TRAVEL_CHALLENGE_STOP_COUNT}.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -600,10 +667,15 @@ export default function TravelChallengesPage() {
                           {(rec.description as string) ?? "--"}
                         </p>
                         <p className="text-xs text-zinc-500 mt-2">
-                          {count} challenge{count === 1 ? "" : "s"} ·{" "}
+                          <span className={count < TRAVEL_CHALLENGE_STOP_COUNT ? "text-amber-400" : undefined}>
+                            {count} of {TRAVEL_CHALLENGE_STOP_COUNT} stops
+                            {count < TRAVEL_CHALLENGE_STOP_COUNT &&
+                              ` — add ${TRAVEL_CHALLENGE_STOP_COUNT - count} more to publish`}
+                          </span>{" "}
+                          ·{" "}
                           {(rec.completion_mode as string) === "any"
-                            ? "Any wins"
-                            : "Complete all"}
+                            ? "Visit any stop"
+                            : "Visit every stop"}
                         </p>
                       </div>
                     </div>
