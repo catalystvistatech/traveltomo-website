@@ -252,7 +252,7 @@ function CreateCard({
 function CardItem({ card }: { card: StampCardRow }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const ended = card.ends_at != null && new Date(card.ends_at).getTime() <= Date.now();
+  const ended = card.ended;
   const live = card.status === "active" && !ended;
 
   function setStatus(status: "active" | "paused" | "archived") {

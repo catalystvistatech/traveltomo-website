@@ -22,6 +22,8 @@ export type StampCardRow = {
   reward_title: string;
   status: "active" | "paused" | "archived";
   ends_at: string | null;
+  /** Past its last day (computed server-side). */
+  ended: boolean;
   qr_url: string;
   qr_svg: string;
   stats: { collectors: number; stampsThisWeek: number; freebiesEarned: number; freebiesGiven: number };
@@ -60,6 +62,7 @@ export async function listStampCards(): Promise<StampCardRow[]> {
         reward_title: c.reward_title as string,
         status: c.status as StampCardRow["status"],
         ends_at: (c.ends_at as string | null) ?? null,
+        ended: c.ends_at != null && new Date(c.ends_at as string).getTime() <= Date.now(),
         qr_url: url,
         qr_svg: await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M" }),
         stats: {

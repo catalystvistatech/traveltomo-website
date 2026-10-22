@@ -64,11 +64,11 @@ export function AppSidebar({ user }: { user: UserProfile }) {
     {
       label: "Manage Business",
       items: [
-        { title: "Profile", href: "/admin/business", icon: Store },
-        { title: "Challenges", href: "/admin/travel-challenges", icon: Trophy },
+        { title: "Quests", href: "/admin/travel-challenges", icon: Trophy },
         { title: "Stamp Cards", href: "/admin/stamp-cards", icon: Stamp },
-        { title: "Templates", href: "/admin/template-library", icon: FileStack },
-        { title: "Verifications", href: "/admin/completions", icon: CheckCircle2 },
+        { title: "Approve Visits", href: "/admin/completions", icon: CheckCircle2 },
+        { title: "Profile", href: "/admin/business", icon: Store },
+        { title: "Stop Templates", href: "/admin/template-library", icon: FileStack },
         { title: "Claim History", href: "/admin/claims", icon: History },
         { title: "Promotions", href: "/admin/promote", icon: Megaphone },
         { title: "Rewards", href: "/admin/rewards", icon: Gift },
@@ -143,8 +143,8 @@ export function AppSidebar({ user }: { user: UserProfile }) {
             </p>
           </Link>
           <Link
-            href="/admin/rewards"
-            title="Create rewards"
+            href="/admin/travel-challenges/new"
+            title="Make a quest"
             className="shrink-0 text-red-400 hover:text-red-300"
           >
             <Gift className="h-6 w-6" />
@@ -152,10 +152,10 @@ export function AppSidebar({ user }: { user: UserProfile }) {
         </div>
 
         <Link
-          href="/admin/rewards"
+          href="/admin/travel-challenges/new"
           className="block rounded-lg border border-dashed border-red-500/40 bg-red-500/5 px-3 py-1.5 text-center text-[11px] leading-tight text-red-300 hover:bg-red-500/10"
         >
-          Click me to create rewards!
+          + Make a quest in 3 steps
         </Link>
 
         <div className="relative">

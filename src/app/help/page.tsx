@@ -10,31 +10,35 @@ export const metadata: Metadata = {
 const FAQS: { q: string; a: string }[] = [
   {
     q: "How do I play?",
-    a: "Roll the dice to get your next stop, follow the route to the location, then complete the challenge (photo, GPS check-in, QR scan, or quiz) to earn your reward.",
+    a: "Roll the dice to get your next stop, follow the route to the location, then check in there (a photo or a GPS check-in) to earn your reward.",
   },
   {
     q: "How do I claim a reward?",
-    a: "After you finish a challenge you get a QR code. Show it to the staff at the partner business to redeem your discount or freebie.",
+    a: "After you finish a stop you get a short code. Show it to the staff at the business running the quest and they'll hand over your discount or freebie.",
   },
   {
     q: "What are skips?",
-    a: "If you do not like the stop you rolled, you can skip and re-roll for a different one. On the free plan a short ad plays before each re-roll.",
+    a: "If you do not like the stop you rolled, you can skip and re-roll for a different one. You get 3 skips every 3 hours; on the free plan a short ad may play first.",
   },
   {
     q: "What does the Unlimited Pass give me?",
-    a: "No ads, unlimited access to guides and maps, and more perks. You can subscribe from onboarding or your profile.",
+    a: "No ads and unlimited skips. You can subscribe when you first set up the app, or from Settings.",
   },
   {
     q: "Why did a challenge disappear?",
-    a: "Challenges are time-boxed by the merchant. Once a quest's dates pass it expires and leaves the list. Finished stops stay marked as claimed.",
+    a: "Quests run between dates the business chooses. After the last day the quest ends and leaves the list. Rewards you already earned stay in My Rewards.",
+  },
+  {
+    q: "How do stamp cards work?",
+    a: "Some shops have a TravelTomo QR at the counter. Open the app, tap Stamps, then Scan — you get one stamp per visit. Fill the card and you get a freebie code to show the staff.",
   },
   {
     q: "How do I change my photo or avatar?",
     a: "In the app, open Settings then Edit Profile. Your profile photo is used when set; otherwise your avatar is shown.",
   },
   {
-    q: "I'm a business — how do I create challenges?",
-    a: "Register as a merchant on the dashboard, build a challenge with rewards using the guided wizard, and submit it for approval. Once approved it goes live for travelers.",
+    q: "I'm a business — how do I get started?",
+    a: "Register as a merchant on the dashboard. Once your business is verified, tap \"Make a quest\": pick your rewards, tap 6 places near you, and publish — it goes live right away. You can also set up a Stamp Card so regulars earn a freebie every few visits.",
   },
 ];
 
@@ -46,7 +50,7 @@ export default function HelpPage() {
           href="/"
           className="text-sm text-zinc-400 hover:text-white transition-colors"
         >
-          ? Back to TravelTomo
+          ← Back to TravelTomo
         </Link>
 
         <h1 className="mt-8 text-4xl font-bold tracking-tight">

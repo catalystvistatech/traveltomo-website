@@ -103,10 +103,10 @@ export default function CompletionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Verify Completions</h1>
+        <h1 className="text-2xl font-bold text-white">Approve Visits</h1>
         <p className="text-zinc-400 mt-1">
-          Confirm users actually completed your challenge before releasing the
-          reward.
+          Travelers who finished a stop show up here. Check their photo, then
+          approve to release their reward.
         </p>
       </div>
 
