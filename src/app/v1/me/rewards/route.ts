@@ -47,6 +47,8 @@ export async function GET(request: Request) {
     )
     .eq("user_id", user.id)
     .not("completed_at", "is", null)
+    // Skipped / expired stops were never submitted; they aren't claims.
+    .or("player_status.is.null,player_status.not.in.(skipped,expired)")
     .order("completed_at", { ascending: false })
     .limit(limit);
 

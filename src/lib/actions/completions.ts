@@ -18,6 +18,11 @@ export async function listPendingCompletions(limit = 50, offset = 0) {
     .select(
       "id, user_id, challenge_id, verification_status, verification_code, completed_at, gps_latitude, gps_longitude, proof_url, challenges!inner(id, title, merchant_id, rewards(id, title, discount_type, discount_value))"
     )
+    // Only stops the traveler actually submitted. Accepted-but-unsubmitted,
+    // skipped and expired rows are also "pending" but there is nothing to
+    // verify — listing them let merchants approve visits that never happened.
+    .not("completed_at", "is", null)
+    .or("player_status.is.null,player_status.not.in.(skipped,expired)")
     .order("completed_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -37,6 +37,9 @@ export async function POST(request: Request, { params }: Params) {
     .eq("user_id", user.id)
     .eq("challenge_id", challengeId)
     .is("completed_at", null)
+    // Expired stops also have completed_at NULL; skipping one must not
+    // charge a skip.
+    .eq("player_status", "ongoing")
     .order("accepted_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
