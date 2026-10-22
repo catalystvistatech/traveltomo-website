@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/supabase/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emitNotification } from "@/lib/notifications/emit";
 import { syncTravelChallengeProgressCompletion } from "@/lib/challenge-progress";
+import { STAMP_REWARD_PREFIX, redeemStampReward } from "@/lib/stamps";
 
 /**
  * POST /v1/redemptions/verify
@@ -54,6 +55,33 @@ export async function POST(request: Request) {
       merchantUserId: user.id,
       role,
       admin,
+    });
+  }
+
+  // Stamp-card freebies (`TT-SC-`) live on stamp_card_rewards. There is
+  // nothing to reject: the card was filled, so the only action is handing
+  // the freebie over.
+  if (code.startsWith(STAMP_REWARD_PREFIX)) {
+    if (body.reject) {
+      return NextResponse.json({ error: "cannot_reject_stamp_reward" }, { status: 400 });
+    }
+    const isStaff = role === "admin" || role === "superadmin";
+    const result = await redeemStampReward(admin, code, user.id, isStaff ? null : user.id);
+    if (!result.ok) {
+      const status =
+        result.error === "not_found" ? 404 : result.error === "forbidden" ? 403 : result.error === "already_redeemed" ? 409 : 500;
+      return NextResponse.json({ error: result.error, message: result.message }, { status });
+    }
+    await emitNotification({
+      userId: result.userId,
+      kind: "reward_ready",
+      title: "Freebie claimed",
+      body: `Enjoy your ${result.rewardTitle}! Your ${result.cardTitle} card starts fresh.`,
+      icon: "gift.fill",
+      metadata: { stamp_reward_id: result.rewardId },
+    });
+    return NextResponse.json({
+      data: { stamp_reward_id: result.rewardId, status: "redeemed", kind: "stamp_reward" },
     });
   }
 

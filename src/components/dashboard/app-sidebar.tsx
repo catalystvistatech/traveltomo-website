@@ -24,6 +24,7 @@ import {
   Search,
   HelpCircle,
   UserCog,
+  Stamp,
 } from "lucide-react";
 import {
   Sidebar,
@@ -65,6 +66,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
       items: [
         { title: "Profile", href: "/admin/business", icon: Store },
         { title: "Challenges", href: "/admin/travel-challenges", icon: Trophy },
+        { title: "Stamp Cards", href: "/admin/stamp-cards", icon: Stamp },
         { title: "Templates", href: "/admin/template-library", icon: FileStack },
         { title: "Verifications", href: "/admin/completions", icon: CheckCircle2 },
         { title: "Claim History", href: "/admin/claims", icon: History },
