@@ -51,6 +51,7 @@ const STATUS_CLASS: Record<string, string> = {
   paused: "border-zinc-600 text-zinc-300",
   archived: "border-zinc-700 text-zinc-500",
   rejected: "border-red-600 text-red-400",
+  expired: "border-amber-700 text-amber-400",
 };
 
 type LibraryReward = {
@@ -78,7 +79,7 @@ function isoDate(d: Date): string {
 function describeRange(start: string, end: string): string {
   const fmt = (v: string) =>
     new Date(`${v}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-  if (!start && !end) return "No dates set — the quest runs until you pause it.";
+  if (!start && !end) return "No dates set — the quest keeps running until you delete it.";
   if (start && !end) return `Starts ${fmt(start)}, no end date.`;
   if (!start && end) return `Ends ${fmt(end)}.`;
   const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
@@ -103,7 +104,9 @@ export default function TravelChallengesPage() {
     description: "",
     cover_url: "",
     business_id: "",
-    completion_mode: "any" as "any" | "all",
+    // The server always requires every stop (see challenge-progress.ts), so
+    // there is no "any stop" mode to offer.
+    completion_mode: "all" as "any" | "all",
     date_range_start: "",
     date_range_end: "",
     max_total_completions: "",
@@ -390,37 +393,9 @@ export default function TravelChallengesPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-zinc-500">Stops must be within this business&apos;s service area.</p>
+                <p className="text-xs text-zinc-500">Travelers claim every reward at this business.</p>
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label className="text-zinc-300">How do travelers win?</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {([
-                  { value: "any", title: "Visit any stop", hint: "Each stop gives its own reward." },
-                  { value: "all", title: "Visit every stop", hint: "Finishing all of them unlocks a big reward." },
-                ] as const).map((opt) => {
-                  const active = form.completion_mode === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, completion_mode: opt.value })}
-                      aria-pressed={active}
-                      className={`text-left rounded-lg border p-3 transition-colors ${
-                        active
-                          ? "border-red-600 bg-red-600/10"
-                          : "border-zinc-700 bg-zinc-800 hover:border-zinc-500"
-                      }`}
-                    >
-                      <p className="text-sm font-medium text-white">{opt.title}</p>
-                      <p className="text-xs text-zinc-400 mt-0.5">{opt.hint}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -449,24 +424,8 @@ export default function TravelChallengesPage() {
             <p className="text-xs text-zinc-500 -mt-2">
               {describeRange(form.date_range_start, form.date_range_end)}
             </p>
-            <div className="space-y-2">
-              <Label className="text-zinc-300">
-                Limit how many travelers can win (optional)
-              </Label>
-              <Input
-                type="number"
-                value={form.max_total_completions}
-                onChange={(e) =>
-                  setForm({ ...form, max_total_completions: e.target.value })
-                }
-                placeholder="Leave empty for no limit — e.g. 100 closes the quest after 100 winners"
-                className="bg-zinc-800 border-zinc-700 text-white"
-              />
-            </div>
-            {/* The big reward only exists for "visit every stop" quests, so it
-                is hidden otherwise instead of asking the merchant to fill in a
-                section that cannot apply. */}
-            {form.completion_mode === "all" && (
+            {/* Every quest requires all stops, so the big reward always applies. */}
+            {(
             <div className="pt-2 border-t border-zinc-800 space-y-3">
               <h3 className="text-sm font-semibold text-white">
                 Big reward for finishing every stop
@@ -687,11 +646,7 @@ export default function TravelChallengesPage() {
                             {count} of {TRAVEL_CHALLENGE_STOP_COUNT} stops
                             {count < TRAVEL_CHALLENGE_STOP_COUNT &&
                               ` — add ${TRAVEL_CHALLENGE_STOP_COUNT - count} more to publish`}
-                          </span>{" "}
-                          ·{" "}
-                          {(rec.completion_mode as string) === "any"
-                            ? "Visit any stop"
-                            : "Visit every stop"}
+                          </span>
                         </p>
                       </div>
                     </div>

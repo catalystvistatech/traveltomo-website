@@ -354,7 +354,7 @@ export default function NewQuestWizardPage() {
               </ol>
             </div>
             <p className="text-zinc-500 text-sm">
-              Travelers snap a photo at each stop, then show their QR code to claim the prize.
+              Travelers snap a photo at each stop, then show their code at {business?.name ?? "your business"} to claim the prize.
             </p>
           </CardContent>
         </Card>

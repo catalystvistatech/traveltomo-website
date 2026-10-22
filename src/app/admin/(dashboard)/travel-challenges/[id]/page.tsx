@@ -9,6 +9,8 @@ import {
   removeChildChallenge,
   updateChildChallenge,
   updateTravelChallenge,
+  setTravelChallengeBusiness,
+  renewTravelChallenge,
   deleteTravelChallenge,
   submitTravelChallengeForReview,
   cloneTemplateIntoTravelChallenge,
@@ -46,6 +48,7 @@ import {
 } from "@/lib/validations/marketplace";
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X, ImagePlus } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { manilaToday, questState } from "@/lib/quest-window";
 import type { PlacePrediction } from "@/components/business-location-picker";
 import { APIProvider, Map, Marker, useMap } from "@vis.gl/react-google-maps";
 
@@ -145,7 +148,7 @@ export default function TravelChallengeDetailPage({
     description: "",
     cover_url: "",
     business_id: "",
-    completion_mode: "any" as "any" | "all",
+    completion_mode: "all" as "any" | "all",
     date_range_start: "",
     date_range_end: "",
     max_total_completions: "",
@@ -407,7 +410,8 @@ export default function TravelChallengeDetailPage({
       description: (r.description as string) ?? "",
       cover_url: (r.cover_url as string) ?? "",
       business_id: (r.business_id as string) ?? "",
-      completion_mode: ((r.completion_mode as string) ?? "any") as "any" | "all",
+      // Every quest requires all stops; keep the column in step with that.
+      completion_mode: "all" as "any" | "all",
       date_range_start: (r.date_range_start as string) ?? "",
       date_range_end: (r.date_range_end as string) ?? "",
       max_total_completions: r.max_total_completions != null ? String(r.max_total_completions) : "",
@@ -467,7 +471,7 @@ export default function TravelChallengeDetailPage({
   }
 
   async function handleDeleteTC() {
-    if (!confirm(`Delete "${(tc as Record<string, unknown>).title}"? All stops will also be deleted. This cannot be undone.`)) return;
+    if (!confirm(`Move "${(tc as Record<string, unknown>).title}" to Trash? You can restore it from the Quests page within 30 days.`)) return;
     const r = await deleteTravelChallenge(id);
     if ("error" in r) { toast.error(r.error as string); return; }
     toast.success("Quest deleted");
@@ -525,14 +529,9 @@ export default function TravelChallengeDetailPage({
             {(rec.description as string) ?? "--"}
           </p>
           <p className="text-xs text-zinc-500 mt-2">
-            {(rec.completion_mode as string) === "any"
-              ? "Completing any 1 challenge rewards the user."
-              : "Completing all challenges unlocks the big reward."}
-            {rec.date_range_start
-              ? ` · Runs ${rec.date_range_start} – ${rec.date_range_end ?? "open"}`
-              : ""}
-            {rec.max_total_completions
-              ? ` · Cap ${rec.current_total_completions as number}/${rec.max_total_completions as number}`
+            Each stop gives its own reward; finishing every stop unlocks the big reward.
+            {rec.date_range_start || rec.date_range_end
+              ? ` · Runs ${(rec.date_range_start as string | null) ?? "now"} – ${(rec.date_range_end as string | null) ?? "no end date"}`
               : ""}
           </p>
         </div>
@@ -571,6 +570,12 @@ export default function TravelChallengeDetailPage({
         </div>
       </div>
 
+      {questState({
+        status,
+        date_range_start: (rec.date_range_start as string | null) ?? null,
+        date_range_end: (rec.date_range_end as string | null) ?? null,
+      }) === "ended" && <RenewQuestBanner id={id} endedOn={(rec.date_range_end as string | null) ?? null} onRenewed={reload} />}
+
       {/* Business assignment banner — shown when merchant has multiple businesses */}
       {businesses.length > 1 && (() => {
         const assignedBizId = rec.business_id as string | null;
@@ -586,13 +591,9 @@ export default function TravelChallengeDetailPage({
             <Select
               value={assignedBizId ?? "none"}
               onValueChange={async (v) => {
-                const newBizId = v === "none" ? "" : v;
-                const r = await updateTravelChallenge(id, {
-                  title: rec.title as string,
-                  completion_mode: (rec.completion_mode as string) ?? "any",
-                  business_id: newBizId,
-                });
-                if ("error" in r) toast.error("Could not update business assignment");
+                const newBizId = v === "none" ? null : v;
+                const r = await setTravelChallengeBusiness(id, newBizId);
+                if ("error" in r) toast.error(r.error);
                 else { toast.success(newBizId ? "Business assigned." : "Business unassigned."); await reload(); }
               }}
             >
@@ -645,19 +646,6 @@ export default function TravelChallengeDetailPage({
               <div className="space-y-2">
                 <Label className="text-zinc-300">Title *</Label>
                 <Input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-zinc-300">Completion Mode</Label>
-                <Select value={editForm.completion_mode} onValueChange={(v: string | null) => v && setEditForm({ ...editForm, completion_mode: v as "any" | "all" })}>
-                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-white"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Any — complete 1</SelectItem>
-                    <SelectItem value="all">All — complete every stop</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-zinc-500">
-                  &ldquo;Any&rdquo; lets travelers finish one stop. &ldquo;All&rdquo; requires every stop and unlocks the Big Reward below.
-                </p>
               </div>
             </div>
             <div className="space-y-2">
@@ -726,13 +714,6 @@ export default function TravelChallengeDetailPage({
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-zinc-300">Max Completions</Label>
-              <Input type="number" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} placeholder="Unlimited" className="bg-zinc-800 border-zinc-700 text-white" />
-              <p className="text-xs text-zinc-500">
-                Total number of travelers who can claim this quest. Leave blank for unlimited.
-              </p>
-            </div>
 
             <div className="pt-3 border-t border-zinc-800 space-y-3">
               <h4 className="text-sm font-semibold text-white">
@@ -1340,6 +1321,58 @@ export default function TravelChallengeDetailPage({
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Shown on a quest that has ended: travelers can no longer see or play it.
+ * One tap runs it again until the chosen day (default: 30 days from today).
+ */
+function RenewQuestBanner({
+  id,
+  endedOn,
+  onRenewed,
+}: {
+  id: string;
+  endedOn: string | null;
+  onRenewed: () => Promise<void> | void;
+}) {
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date(`${manilaToday()}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-700/60 bg-amber-900/20 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-amber-200">This quest has ended{endedOn ? ` (last day: ${endedOn})` : ""}.</p>
+        <p className="text-sm text-amber-200/70">Travelers can no longer see or play it. Run it again to bring it back.</p>
+      </div>
+      <Input
+        type="date"
+        value={endDate}
+        min={manilaToday()}
+        onChange={(e) => setEndDate(e.target.value)}
+        className="w-44 border-zinc-700 bg-zinc-800 text-white"
+      />
+      <Button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const r = await renewTravelChallenge(id, endDate);
+          setBusy(false);
+          if ("error" in r) toast.error(r.error);
+          else {
+            toast.success(`Quest is live again until ${endDate}.`);
+            await onRenewed();
+          }
+        }}
+        className="bg-green-600 text-white hover:bg-green-700"
+      >
+        {busy ? "Starting…" : "Run it again"}
+      </Button>
     </div>
   );
 }
