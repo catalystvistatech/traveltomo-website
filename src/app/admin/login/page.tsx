@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,12 +15,25 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error: errorParam } = use(searchParams);
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // The OAuth callback redirects back here with ?error=… when the sign-in
+  // can't be completed. Read it once on first render so the failure is
+  // visible instead of silently showing an empty form again.
+  const [error, setError] = useState<string | null>(() => {
+    if (!errorParam) return null;
+    return errorParam === "auth_callback_failed"
+      ? "We couldn't finish signing you in. Please try again."
+      : "Sign-in was cancelled or failed. Please try again.";
+  });
   const [loading, setLoading] = useState(false);
 
   // Dedicated "needs to verify email" state so users aren't staring at
