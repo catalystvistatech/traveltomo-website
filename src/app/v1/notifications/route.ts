@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/supabase/api";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") ?? 50), 200));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
   const unreadOnly = url.searchParams.get("unread_only") === "true";
 
   let query = client
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
     .select("id, kind, title, body, icon, deeplink, metadata, read_at, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (unreadOnly) query = query.is("read_at", null);
 
@@ -30,7 +32,9 @@ export async function GET(request: Request) {
   if (listError)
     return NextResponse.json({ error: listError.message }, { status: 500 });
 
-  const { data: unreadData, error: countError } = await client.rpc(
+  // unread_notification_count / mark_notifications_read trust p_user, so
+  // only the server may call them (063).
+  const { data: unreadData, error: countError } = await createAdminClient().rpc(
     "unread_notification_count",
     { p_user: user.id },
   );
@@ -49,7 +53,7 @@ export async function GET(request: Request) {
  *   - omit `ids` to mark all unread as read
  */
 export async function POST(request: Request) {
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
@@ -64,7 +68,7 @@ export async function POST(request: Request) {
 
   const ids = Array.isArray(body.ids) && body.ids.length > 0 ? body.ids : null;
 
-  const { data, error: rpcError } = await client.rpc("mark_notifications_read", {
+  const { data, error: rpcError } = await createAdminClient().rpc("mark_notifications_read", {
     p_user: user.id,
     p_ids: ids,
   });

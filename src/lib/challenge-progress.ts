@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   PlayerStopStatus,
   TravelProgressStatus,
@@ -170,7 +171,10 @@ export async function syncTravelChallengeProgressCompletion(
       updated_at: new Date().toISOString(),
     })
     .eq("id", progressId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    // Only an in-progress session can complete. An expired (or quit)
+    // session must never flip to completed and unlock the big reward.
+    .eq("status", "active");
 }
 
 /** Builds progress summary for API responses. */
@@ -208,6 +212,52 @@ export function buildTravelProgressPayload(
         skips_limit: progress.skips_limit ?? 3,
       }
     : null;
+}
+
+/**
+ * One skip economy for the whole app: the user's GLOBAL pool (3 skips,
+ * refilled every 3 hours by `refill_free_skips_if_due`, unlimited for
+ * subscribers via migration 049). Quest routes historically charged a
+ * separate per-quest budget; these helpers consume/read the global pool
+ * and translate to the legacy per-quest wire shape
+ * ({consumed, requires_ad, skips_used, skips_limit}) so existing app
+ * builds keep decoding without changes.
+ */
+const GLOBAL_SKIP_LIMIT = 3;
+
+function toQuestShape(raw: unknown, consumedFallback: boolean) {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const free = typeof r.free_remaining === "number" ? r.free_remaining : 0;
+  const extra = typeof r.extra_remaining === "number" ? r.extra_remaining : 0;
+  const remaining = Math.max(0, free + extra);
+  return {
+    consumed: r.consumed === true || (r.consumed === undefined && consumedFallback),
+    requires_ad: r.consumed === false,
+    skips_used: Math.min(GLOBAL_SKIP_LIMIT, Math.max(0, GLOBAL_SKIP_LIMIT - remaining)),
+    skips_limit: GLOBAL_SKIP_LIMIT,
+  };
+}
+
+/**
+ * Consumes one skip from the caller's global pool. Throws on RPC failure.
+ * The skip functions trust p_user, so they run on the server's client only
+ * (063); callers pass the already-authenticated user's id.
+ */
+export async function consumeGlobalSkip(userId: string) {
+  const { data, error } = await createAdminClient().rpc("consume_skip_token", {
+    p_user: userId,
+  });
+  if (error) throw new Error(error.message);
+  return toQuestShape(data, false);
+}
+
+/** Reads the caller's global pool without consuming. */
+export async function globalSkipStatus(userId: string) {
+  const { data, error } = await createAdminClient().rpc("skip_token_status", {
+    p_user: userId,
+  });
+  if (error) throw new Error(error.message);
+  return toQuestShape(data, true);
 }
 
 /** Completions that block a stop from appearing in the roll pool again. */

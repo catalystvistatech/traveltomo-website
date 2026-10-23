@@ -5,7 +5,7 @@ import { useEffect } from "react";
 /**
  * Catches errors thrown by the **root** `app/layout.tsx` (or any code
  * it imports before the page renders). This is the last line of
- * defence — it replaces the entire document, so it must render its
+ * defence - it replaces the entire document, so it must render its
  * own `<html>` / `<body>` per Next.js requirements.
  *
  * Errors thrown by nested layouts (e.g. `(dashboard)/layout.tsx`) and
@@ -61,7 +61,7 @@ export default function GlobalError({
             Something went wrong
           </h1>
           <p style={{ fontSize: 14, color: "#a1a1aa", marginBottom: 16 }}>
-            The app hit an unexpected error. Try again — if it keeps
+            The app hit an unexpected error. Try again - if it keeps
             happening, send us the reference below.
           </p>
           {error.digest && (

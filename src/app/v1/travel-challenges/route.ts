@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 
 /**
  * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
@@ -29,7 +32,7 @@ export async function GET(request: Request) {
     .select(
       `id, title, description, cover_url, completion_mode,
        big_reward_title, big_reward_description, big_reward_discount_type,
-       big_reward_discount_value, status, created_at,
+       big_reward_discount_value, status, created_at, date_range_start, date_range_end,
        business:businesses!travel_challenges_business_id_fkey (
          id, name, city, latitude, longitude, establishment_type, service_radius_meters
        ),
@@ -52,6 +55,8 @@ export async function GET(request: Request) {
     big_reward_discount_value: number | null;
     status: string;
     created_at: string;
+    date_range_start: string | null;
+    date_range_end: string | null;
     business:
       | {
           id: string;
@@ -68,7 +73,14 @@ export async function GET(request: Request) {
 
   const hasCoord = Number.isFinite(lat) && Number.isFinite(lng);
 
-  const ranked = (data ?? []).map((raw) => {
+  // Hide quests outside their campaign window right away (Philippine
+  // dates) instead of waiting for the hourly expiry cron.
+  const today = manilaToday();
+  const running = (data ?? []).filter((raw) =>
+    isQuestPlayable(raw as unknown as QuestWindow, today)
+  );
+
+  const ranked = running.map((raw) => {
     const r = raw as unknown as Row;
     const blat = r.business?.latitude ?? null;
     const blng = r.business?.longitude ?? null;
@@ -107,8 +119,13 @@ export async function GET(request: Request) {
   const filtered = hasCoord
     ? ranked.filter((r) => {
         if (r.distance_meters == null) return false;
-        const businessRadius = r.service_radius_meters ?? 2000; // default to 2km
-        const effectiveRadius = Math.min(businessRadius, maxRadiusMeters);
+        // Floor as well as ceiling: a merchant who set an unusably small
+        // radius (prod had one at 100 m) would otherwise be invisible to
+        // everyone, with nothing in the product telling them why.
+        const effectiveRadius = effectiveServiceRadius(
+          r.service_radius_meters,
+          maxRadiusMeters
+        );
         return r.distance_meters <= effectiveRadius;
       })
     : ranked;
@@ -121,12 +138,45 @@ export async function GET(request: Request) {
 
   const page = filtered.slice(offset, offset + limit);
 
-  return NextResponse.json({
-    data: page,
-    count: page.length,
-    total: filtered.length,
-    has_more: offset + limit < filtered.length,
-  });
+  // Quests without a cover photo rendered as a plain blue gradient in the
+  // app. Fall back to the business's own place photo (mirrored from Google
+  // by 047) so every card shows the actual place.
+  const needCover = Array.from(
+    new Set(page.filter((r) => !r.cover_url && r.business_id).map((r) => r.business_id as string))
+  );
+  if (needCover.length > 0) {
+    const { data: photos } = await createAdminClient()
+      .from("places")
+      .select("business_id, image_url")
+      .in("business_id", needCover)
+      .not("image_url", "is", null);
+    const photoByBusiness = new Map(
+      (photos ?? []).map((p) => [p.business_id as string, p.image_url as string])
+    );
+    for (const r of page) {
+      if (!r.cover_url && r.business_id) r.cover_url = photoByBusiness.get(r.business_id) ?? null;
+    }
+  }
+
+  return NextResponse.json(
+    {
+      data: page,
+      count: page.length,
+      total: filtered.length,
+      has_more: offset + limit < filtered.length,
+    },
+    {
+      headers: {
+        // Anonymous, location-keyed list. Quantizing lat/lng (~1km grid)
+        // on the client + this header lets the Vercel CDN collapse
+        // identical requests across users; revalidation in the background
+        // keeps the feed fresh without origin hits during cold-launch
+        // waves.
+        "Cache-Control":
+          "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    }
+  );
 }
 
 function haversine(

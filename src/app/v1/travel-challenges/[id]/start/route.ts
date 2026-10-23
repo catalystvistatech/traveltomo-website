@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { ensureTravelChallengeProgress } from "@/lib/challenge-progress";
+import { guardQuestPlayable } from "@/lib/quest-dates";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
  * POST /v1/travel-challenges/:id/start
  *
  * Ensures the caller has an active `travel_challenge_progress` row for
- * this set. Idempotent — safe to call when the user taps Start Challenge.
+ * this set. Idempotent - safe to call when the user taps Start Challenge.
  */
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
@@ -30,6 +31,9 @@ export async function POST(request: Request, { params }: Params) {
   if (!tc) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+
+  const notPlayable = await guardQuestPlayable(id);
+  if (notPlayable) return notPlayable;
 
   try {
     const progress = await ensureTravelChallengeProgress(client, user.id, id);

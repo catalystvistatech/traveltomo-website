@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavLogo } from "@/components/landing/nav-logo";
 
 const RED = "#D12D34";
 const SALMON = "#FCA581";
@@ -38,9 +39,7 @@ function Nav() {
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.svg" alt="TravelTomo" width={120} height={32} className="h-8 w-auto" />
-        </Link>
+        <NavLogo />
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <a href="#how-it-works" className="hover:text-white transition-colors">
             How It Works
@@ -55,12 +54,14 @@ function Nav() {
             Dashboard
           </Link>
         </div>
-        <Button
-          className="text-sm rounded-full px-5 text-white"
-          style={{ backgroundColor: RED }}
-        >
-          Download App
-        </Button>
+        <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+          <Button
+            className="text-sm rounded-full px-5 text-white"
+            style={{ backgroundColor: RED }}
+          >
+            Download App
+          </Button>
+        </a>
       </div>
     </nav>
   );
@@ -104,14 +105,16 @@ function Hero() {
             </p>
 
             <div className="flex items-center gap-4">
-              <Button
-                size="lg"
-                className="text-sm font-semibold rounded-full px-6 h-11 text-white"
-                style={{ backgroundColor: RED }}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Download for iOS
-              </Button>
+              <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+                <Button
+                  size="lg"
+                  className="text-sm font-semibold rounded-full px-6 h-11 text-white"
+                  style={{ backgroundColor: RED }}
+                >
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  Download for iOS
+                </Button>
+              </a>
               <span className="text-sm text-zinc-500">Available on Android Soon</span>
             </div>
           </div>
@@ -220,7 +223,7 @@ function Features() {
     {
       icon: <Trophy className="h-5 w-5" />,
       title: "Challenge System",
-      desc: "GPS check-ins, photo proofs, QR scans, and quizzes.",
+      desc: "GPS check-ins and photo proofs at real places.",
     },
     {
       icon: <QrCode className="h-5 w-5" />,
@@ -277,17 +280,17 @@ function Features() {
 
 function ForMerchants() {
   const checklist = [
-    "Create challenges in minutes with our guided wizard",
-    "Set GPS, QR, photo, or quiz verification",
-    "Attach discount rewards with redemption limits",
-    "Track completions and redemptions in real time",
+    "Make a quest in 3 steps: pick rewards, tap 6 nearby places, publish",
+    "Stamp cards: travelers scan your QR each visit and earn a freebie",
+    "Photo and GPS check-ins prove travelers really visited",
+    "Track visits and freebies in real time",
   ];
 
   const steps = [
     { step: "1", text: "Create your business profile" },
-    { step: "2", text: "Build a challenge with rewards" },
-    { step: "3", text: "Submit for approval" },
-    { step: "4", text: "Challenge goes live" },
+    { step: "2", text: "Get verified" },
+    { step: "3", text: "Make a quest or a stamp card" },
+    { step: "4", text: "It goes live right away" },
     { step: "5", text: "Travelers discover your business" },
   ];
 
@@ -390,14 +393,16 @@ function CTA() {
           Currently available in Angeles City, Pampanga.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button
-            size="lg"
-            className="text-sm font-semibold rounded-full px-8 h-12 text-white"
-            style={{ backgroundColor: RED }}
-          >
-            <Smartphone className="h-4 w-4 mr-2" />
-            Download on iOS
-          </Button>
+          <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+            <Button
+              size="lg"
+              className="text-sm font-semibold rounded-full px-8 h-12 text-white"
+              style={{ backgroundColor: RED }}
+            >
+              <Smartphone className="h-4 w-4 mr-2" />
+              Download on iOS
+            </Button>
+          </a>
           <Link href="/admin/register">
             <Button
               size="lg"
@@ -425,22 +430,30 @@ function Footer() {
           <p className="text-zinc-500 text-sm italic">
             Explore. Play. Earn. Repeat.
           </p>
-          <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          <Link href="/" aria-label="TravelTomo home" className="inline-flex">
+            <Image src="/logo.svg" alt="TravelTomo" width={140} height={40} className="h-10 w-auto" />
+          </Link>
 
           {/* Links */}
           <div className="flex items-center gap-6 text-sm text-zinc-500">
-            <a href="#" className="hover:text-white transition-colors">
+            <Link href="/privacy" className="hover:text-white transition-colors">
               Privacy
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
+            </Link>
+            <Link href="/terms" className="hover:text-white transition-colors">
               Terms
-            </a>
+            </Link>
+            <Link href="/help" className="hover:text-white transition-colors">
+              Help
+            </Link>
             <a
-              href="mailto:hello@traveltomo.app"
+              href="mailto:info@traveltomo.app"
               className="hover:text-white transition-colors"
             >
               Contact
             </a>
+            <Link href="/help" className="hover:text-white transition-colors">
+              Help
+            </Link>
             <Link
               href="/admin/login"
               className="hover:text-white transition-colors"

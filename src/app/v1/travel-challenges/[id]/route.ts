@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { questState, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient, requireUser } from "@/lib/supabase/api";
 import {
   buildTravelProgressPayload,
   derivePlayerStopStatus,
+  globalSkipStatus,
   loadActiveTravelProgress,
   loadStopCompletionsForTravelChallenge,
 } from "@/lib/challenge-progress";
@@ -26,6 +28,7 @@ export async function GET(request: Request, { params }: Params) {
     .from("travel_challenges")
     .select(
       `id, title, description, cover_url, completion_mode, status,
+       date_range_start, date_range_end,
        big_reward_title, big_reward_description,
        big_reward_discount_type, big_reward_discount_value,
        business:businesses (
@@ -43,14 +46,31 @@ export async function GET(request: Request, { params }: Params) {
     .single();
 
   if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.code === "PGRST116" ? 404 : 500 }
-    );
+    // PGRST116 = zero rows from .single(): the quest doesn't exist or is no
+    // longer visible under RLS (expired / paused / deleted). Surface a human
+    // message — the raw "Cannot coerce the result to a single JSON object"
+    // leaked straight into the iOS error alert.
+    if (error.code === "PGRST116") {
+      return NextResponse.json(
+        { error: "This quest is no longer available." },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "This quest is no longer available." },
+      { status: 404 }
+    );
+  }
+
+  // A quest past its last day (Philippine date) reads as "expired" right
+  // away, before the hourly expiry job flips the row. The iOS preview
+  // already disables Start for status "expired".
+  if (questState(data as unknown as QuestWindow) === "ended") {
+    (data as { status: string }).status = "expired";
   }
 
   type ChildRow = {
@@ -136,6 +156,23 @@ export async function GET(request: Request, { params }: Params) {
       id
     );
     progress = await loadActiveTravelProgress(auth.client, auth.user.id, id);
+    if (!progress) {
+      // No session in play: surface a finished one whose big reward hasn't
+      // been handed over yet, so the app can show "Claim Big Reward".
+      // (Only active sessions were returned before, so a completed quest
+      // looked like a fresh one and its big reward was unreachable.)
+      const { data: completed } = await auth.client
+        .from("travel_challenge_progress")
+        .select("id, status, started_at, completed_at, expires_at, skips_used, skips_limit")
+        .eq("user_id", auth.user.id)
+        .eq("travel_challenge_id", id)
+        .eq("status", "completed")
+        .is("big_reward_redeemed_at", null)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      progress = completed ?? null;
+    }
   }
 
   const childIds = liveChildren.map((c) => c.id);
@@ -160,6 +197,7 @@ export async function GET(request: Request, { params }: Params) {
         duration_minutes: c.duration_minutes,
         latitude: lat,
         longitude: lng,
+        place_id: c.place?.id ?? null,
         place_name: c.place?.name ?? row.business?.name ?? c.title,
         place_image_url: c.place?.image_url ?? null,
         reward_title: reward?.title ?? null,
@@ -171,6 +209,25 @@ export async function GET(request: Request, { params }: Params) {
       };
     })
     .filter((c) => c.latitude != null && c.longitude != null);
+
+  // Skips are one GLOBAL 3h-recharging pool (not per-quest), so the
+  // progress payload reports the pool state — this is what seeds the
+  // map's "skips left" pill.
+  let progressPayload = auth.user
+    ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
+    : null;
+  if (auth.user && progressPayload) {
+    try {
+      const pool = await globalSkipStatus(auth.user.id);
+      progressPayload = {
+        ...progressPayload,
+        skips_used: pool.skips_used,
+        skips_limit: pool.skips_limit,
+      };
+    } catch {
+      // Pool lookup is display-only; keep the payload on failure.
+    }
+  }
 
   return NextResponse.json({
     data: {
@@ -190,10 +247,14 @@ export async function GET(request: Request, { params }: Params) {
       business_latitude: businessLat,
       business_longitude: businessLng,
       establishment_type: row.business?.establishment_type ?? null,
-      progress: auth.user
-        ? buildTravelProgressPayload(progress, childIds, completionsByChallenge)
-        : null,
+      progress: progressPayload,
       children,
     },
+  }, {
+    // The body carries per-user `progress` + per-stop `player_status`,
+    // so we can't share it across users. Private cache lets the iOS
+    // URLCache absorb the quest-preview re-opens that fire during
+    // navigation between Home and the map.
+    headers: { "Cache-Control": "private, max-age=20" },
   });
 }
