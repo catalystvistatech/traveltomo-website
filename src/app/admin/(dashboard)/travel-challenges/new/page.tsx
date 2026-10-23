@@ -134,7 +134,7 @@ export default function NewQuestWizardPage() {
             <p className="text-zinc-400">
               Quests start at your business. Once it&apos;s verified, come back here.
             </p>
-            <Link href="/admin/profile" className="inline-block text-red-400 hover:text-red-300">
+            <Link href="/admin/business" className="inline-block text-red-400 hover:text-red-300">
               Go to Profile →
             </Link>
           </CardContent>

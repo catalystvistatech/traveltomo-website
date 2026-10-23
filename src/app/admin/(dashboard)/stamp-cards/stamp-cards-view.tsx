@@ -274,7 +274,15 @@ function CardItem({ card }: { card: StampCardRow }) {
             <Button
               variant="outline"
               disabled={pending}
-              onClick={() => setStatus("archived")}
+              onClick={() => {
+                if (
+                  confirm(
+                    `Remove "${card.title}"? The printed QR stops working and travelers' progress on this card ends. Use Pause instead if you might bring it back.`
+                  )
+                ) {
+                  setStatus("archived");
+                }
+              }}
               className="gap-1.5 border-zinc-700 text-zinc-400 hover:text-red-300"
             >
               <Trash2 className="h-4 w-4" /> Remove
