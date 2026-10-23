@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { isQuestPlayable, manilaToday } from "@/lib/quest-dates";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     .select(
       `id, travel_challenge_id, status, updated_at,
        travel_challenge:travel_challenges!inner (
-         id, title, cover_url, status,
+         id, title, cover_url, status, date_range_start, date_range_end,
          business:businesses!travel_challenges_business_id_fkey ( name, city ),
          children:challenges!travel_challenge_id ( id, status )
        )`
@@ -60,6 +61,8 @@ export async function GET(request: Request) {
       title: string;
       cover_url: string | null;
       status: string;
+      date_range_start: string | null;
+      date_range_end: string | null;
       business: { name: string | null; city: string | null } | null;
       children: { id: string; status: string }[] | null;
     } | null;
@@ -68,7 +71,12 @@ export async function GET(request: Request) {
   const rows = (progressRows ?? []) as unknown as ProgressRow[];
   // Only surface quests that are still live (a merchant could have
   // paused/archived a quest the traveler had in progress).
-  const liveRows = rows.filter((r) => r.travel_challenge?.status === "live");
+  // Ended quests (past their last day, Philippine time) drop off right
+  // away rather than after the hourly expiry job.
+  const today = manilaToday();
+  const liveRows = rows.filter(
+    (r) => r.travel_challenge != null && isQuestPlayable(r.travel_challenge, today)
+  );
 
   if (liveRows.length === 0) {
     return NextResponse.json(

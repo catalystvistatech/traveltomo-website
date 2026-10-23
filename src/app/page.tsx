@@ -223,7 +223,7 @@ function Features() {
     {
       icon: <Trophy className="h-5 w-5" />,
       title: "Challenge System",
-      desc: "GPS check-ins, photo proofs, QR scans, and quizzes.",
+      desc: "GPS check-ins and photo proofs at real places.",
     },
     {
       icon: <QrCode className="h-5 w-5" />,
@@ -280,17 +280,17 @@ function Features() {
 
 function ForMerchants() {
   const checklist = [
-    "Create challenges in minutes with our guided wizard",
-    "Set GPS, QR, photo, or quiz verification",
-    "Attach discount rewards with redemption limits",
-    "Track completions and redemptions in real time",
+    "Make a quest in 3 steps: pick rewards, tap 6 nearby places, publish",
+    "Stamp cards: travelers scan your QR each visit and earn a freebie",
+    "Photo and GPS check-ins prove travelers really visited",
+    "Track visits and freebies in real time",
   ];
 
   const steps = [
     { step: "1", text: "Create your business profile" },
-    { step: "2", text: "Build a challenge with rewards" },
-    { step: "3", text: "Submit for approval" },
-    { step: "4", text: "Challenge goes live" },
+    { step: "2", text: "Get verified" },
+    { step: "3", text: "Make a quest or a stamp card" },
+    { step: "4", text: "It goes live right away" },
     { step: "5", text: "Travelers discover your business" },
   ];
 

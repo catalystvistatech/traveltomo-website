@@ -170,7 +170,10 @@ export async function syncTravelChallengeProgressCompletion(
       updated_at: new Date().toISOString(),
     })
     .eq("id", progressId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    // Only an in-progress session can complete. An expired (or quit)
+    // session must never flip to completed and unlock the big reward.
+    .eq("status", "active");
 }
 
 /** Builds progress summary for API responses. */

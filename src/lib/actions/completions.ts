@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
 import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { syncTravelChallengeProgressCompletion } from "@/lib/challenge-progress";
 
 export async function listPendingCompletions(limit = 50, offset = 0) {
   const user = await getCurrentUser();
@@ -16,6 +18,11 @@ export async function listPendingCompletions(limit = 50, offset = 0) {
     .select(
       "id, user_id, challenge_id, verification_status, verification_code, completed_at, gps_latitude, gps_longitude, proof_url, challenges!inner(id, title, merchant_id, rewards(id, title, discount_type, discount_value))"
     )
+    // Only stops the traveler actually submitted. Accepted-but-unsubmitted,
+    // skipped and expired rows are also "pending" but there is nothing to
+    // verify — listing them let merchants approve visits that never happened.
+    .not("completed_at", "is", null)
+    .or("player_status.is.null,player_status.not.in.(skipped,expired)")
     .order("completed_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -40,7 +47,7 @@ export async function verifyCompletion(completionId: string) {
   const isStaff = user.role === "admin" || user.role === "superadmin";
   const fetchQuery = supabase
     .from("challenge_completions")
-    .select("id, user_id, challenge_id, completed_at, challenges!inner(title, merchant_id)")
+    .select("id, user_id, challenge_id, completed_at, travel_challenge_progress_id, challenges!inner(title, merchant_id, travel_challenge_id)")
     .eq("id", completionId);
   if (!isStaff) fetchQuery.eq("challenges.merchant_id", user.id);
   const { data: completion, error: fetchError } = await fetchQuery.maybeSingle();
@@ -72,6 +79,17 @@ export async function verifyCompletion(completionId: string) {
   // "Reward unlocked" notification while nothing had actually changed.
   if (!updated || updated.length === 0) {
     return { error: "Completion not found, or you don't have permission to update it." };
+  }
+
+  // Same as /v1/redemptions/verify: verifying a quest's last stop completes
+  // the quest (and unlocks its big reward). Without this, quests whose final
+  // stop was verified from the dashboard never completed.
+  const questId = (completion as { challenges?: { travel_challenge_id?: string | null } | null })
+    .challenges?.travel_challenge_id;
+  const progressId = (completion as { travel_challenge_progress_id?: string | null })
+    .travel_challenge_progress_id;
+  if (questId && progressId && completion.user_id) {
+    await syncTravelChallengeProgressCompletion(createAdminClient(), completion.user_id, questId, progressId);
   }
 
   if (completion?.user_id) {

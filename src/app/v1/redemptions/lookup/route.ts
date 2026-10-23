@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { STAMP_REWARD_PREFIX } from "@/lib/stamps";
 
 /**
  * GET /v1/redemptions/lookup?code=XXXXXX
@@ -44,6 +45,30 @@ export async function GET(request: Request) {
       role,
       admin,
     });
+  }
+
+  if (code.startsWith(STAMP_REWARD_PREFIX)) {
+    const { data: row, error: stampError } = await admin
+      .from("stamp_card_rewards")
+      .select(
+        `id, claim_code, reward_title, earned_at, redeemed_at,
+         user:profiles!stamp_card_rewards_user_id_fkey ( id, display_name ),
+         card:stamp_cards!inner ( id, title, merchant_id, stamps_required, reward_description )`
+      )
+      .eq("claim_code", code)
+      .maybeSingle();
+    if (stampError) {
+      return NextResponse.json({ error: stampError.message }, { status: 500 });
+    }
+    if (!row) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const card = (row as Record<string, unknown>).card as { merchant_id?: string } | null;
+    const isStaff = role === "admin" || role === "superadmin";
+    if (!isStaff && card?.merchant_id !== user.id) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ data: { ...row, kind: "stamp_reward" } });
   }
 
   const { data, error } = await admin

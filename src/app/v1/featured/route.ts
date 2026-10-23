@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday } from "@/lib/quest-dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/supabase/api";
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("travel_challenges")
     .select(
-      `id, title, cover_url, created_at,
+      `id, title, cover_url, created_at, status, date_range_start, date_range_end,
        big_reward_title, big_reward_discount_type, big_reward_discount_value,
        business:businesses!travel_challenges_business_id_fkey!inner (
          id, merchant_id, name, city, latitude, longitude,
@@ -99,6 +100,9 @@ export async function GET(request: Request) {
     title: string;
     cover_url: string | null;
     created_at: string;
+    status: string;
+    date_range_start: string | null;
+    date_range_end: string | null;
     big_reward_title: string | null;
     big_reward_discount_type: string | null;
     big_reward_discount_value: number | null;
@@ -116,7 +120,9 @@ export async function GET(request: Request) {
     children: { id: string; status: string }[] | null;
   };
 
-  const rows = (data ?? []) as unknown as Row[];
+  // Drop quests outside their campaign window (Philippine dates).
+  const today = manilaToday();
+  const rows = ((data ?? []) as unknown as Row[]).filter((r) => isQuestPlayable(r, today));
   const businessIds = Array.from(
     new Set(rows.map((r) => r.business?.id).filter((v): v is string => !!v))
   );

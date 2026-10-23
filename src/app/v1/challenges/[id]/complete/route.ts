@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { guardQuestPlayable } from "@/lib/quest-dates";
 // syncTravelChallengeProgressCompletion is invoked by /v1/redemptions/verify
 // when the merchant approves the code, not at this stage.
 
@@ -35,6 +37,20 @@ export async function POST(request: Request, { params }: Params) {
     proof_url?: string;
   };
 
+  // A stop inside a quest can only be submitted while the quest is still
+  // running. Without this, a stop the expiry job had already marked
+  // `expired` (its completed_at is still null) could be revived here and
+  // carried all the way to the quest's big reward.
+  const { data: stop } = await createAdminClient()
+    .from("challenges")
+    .select("travel_challenge_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (stop?.travel_challenge_id) {
+    const notPlayable = await guardQuestPlayable(stop.travel_challenge_id as string);
+    if (notPlayable) return notPlayable;
+  }
+
   const code = generateCode();
 
   let q = client
@@ -52,7 +68,10 @@ export async function POST(request: Request, { params }: Params) {
     .eq("challenge_id", id)
     // Lock to the active row so abandoned (`skipped` + completed_at set)
     // rows can't be silently revived as if the user had just submitted.
-    .is("completed_at", null);
+    .is("completed_at", null)
+    // Only an in-progress stop can be submitted — never one the expiry
+    // job (or a skip) already closed out.
+    .eq("player_status", "ongoing");
 
   if (body.completion_id) {
     q = q.eq("id", body.completion_id);

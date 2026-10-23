@@ -245,7 +245,7 @@ export async function createQuestWithWizard(
     date_range_end: isoDate(new Date(today.getTime() + 30 * 86_400_000)),
     big_reward_source: "custom",
     big_reward_title: bigReward.title,
-    big_reward_description: "Finish every stop, then show your QR code to claim.",
+    big_reward_description: `Finish every stop, then show your code at ${loaded.business.name} to claim.`,
     big_reward_discount_type: bigReward.type,
     big_reward_discount_value: bigReward.type === "freebie" ? undefined : bigReward.value,
   });
@@ -264,7 +264,9 @@ export async function createQuestWithWizard(
       latitude: place.latitude,
       longitude: place.longitude,
       reward_title: stopReward.title,
-      reward_description: "Show your QR code at the counter to claim.",
+      // Stops are often other nearby places, but only the quest owner can
+      // verify codes, so every reward is claimed at the owner's business.
+      reward_description: `Show your code at ${loaded.business.name} to claim.`,
       reward_discount_type: stopReward.type,
       reward_discount_value: stopReward.type === "freebie" ? undefined : stopReward.value,
     });

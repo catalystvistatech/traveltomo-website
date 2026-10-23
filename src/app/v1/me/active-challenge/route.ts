@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { guardQuestPlayable } from "@/lib/quest-dates";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,8 @@ export async function GET(request: Request) {
     .eq("user_id", user.id)
     .eq("verification_status", "pending")
     .is("completed_at", null)
+    // Expired stops keep completed_at null; don't offer them as "Continue".
+    .eq("player_status", "ongoing")
     .order("accepted_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
@@ -100,6 +103,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: null });
   }
 
+  // A stop whose quest has ended isn't something to "continue".
+  if (challenge.travel_challenge_id) {
+    const notPlayable = await guardQuestPlayable(challenge.travel_challenge_id);
+    if (notPlayable) return NextResponse.json({ data: null }, { headers: cacheHeaders });
+  }
+
   // Resolve the merchant's business � used as the final coordinate
   // fallback when the challenge doesn't carry its own pin and the
   // linked place is null. Public read on `businesses` is allowed by
@@ -117,6 +126,10 @@ export async function GET(request: Request) {
       .from("businesses")
       .select("id, name, latitude, longitude, establishment_type")
       .eq("merchant_id", challenge.merchant_id)
+      // A merchant can own several businesses; maybeSingle() alone errors
+      // (and silently yields null) when there's more than one.
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
     business = (businessRow as BusinessRow | null) ?? null;
   }

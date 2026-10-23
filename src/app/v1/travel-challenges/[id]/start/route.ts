@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { ensureTravelChallengeProgress } from "@/lib/challenge-progress";
+import { guardQuestPlayable } from "@/lib/quest-dates";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -30,6 +31,9 @@ export async function POST(request: Request, { params }: Params) {
   if (!tc) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+
+  const notPlayable = await guardQuestPlayable(id);
+  if (notPlayable) return notPlayable;
 
   try {
     const progress = await ensureTravelChallengeProgress(client, user.id, id);

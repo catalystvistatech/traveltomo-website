@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 
 type Row = Awaited<ReturnType<typeof listPendingCompletions>>[number];
 
@@ -103,17 +104,19 @@ export default function CompletionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Verify Completions</h1>
+        <h1 className="text-2xl font-bold text-white">Approve Visits</h1>
         <p className="text-zinc-400 mt-1">
-          Confirm users actually completed your challenge before releasing the
-          reward.
+          Travelers who finished a stop show up here. Check their photo, then
+          approve to release their reward.
         </p>
       </div>
+
+      <RedeemCodeBox />
 
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
           <CardTitle className="text-white text-base">
-            Scan or paste verification code
+            Find a visit in the list
           </CardTitle>
           <CardDescription className="text-zinc-400">
             Ask the user to show their code from the app, then verify below.

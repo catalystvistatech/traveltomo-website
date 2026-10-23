@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient } from "@/lib/supabase/api";
 import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     .select(
       `id, title, description, cover_url, completion_mode,
        big_reward_title, big_reward_description, big_reward_discount_type,
-       big_reward_discount_value, status, created_at,
+       big_reward_discount_value, status, created_at, date_range_start, date_range_end,
        business:businesses!travel_challenges_business_id_fkey (
          id, name, city, latitude, longitude, establishment_type, service_radius_meters
        ),
@@ -53,6 +54,8 @@ export async function GET(request: Request) {
     big_reward_discount_value: number | null;
     status: string;
     created_at: string;
+    date_range_start: string | null;
+    date_range_end: string | null;
     business:
       | {
           id: string;
@@ -69,7 +72,14 @@ export async function GET(request: Request) {
 
   const hasCoord = Number.isFinite(lat) && Number.isFinite(lng);
 
-  const ranked = (data ?? []).map((raw) => {
+  // Hide quests outside their campaign window right away (Philippine
+  // dates) instead of waiting for the hourly expiry cron.
+  const today = manilaToday();
+  const running = (data ?? []).filter((raw) =>
+    isQuestPlayable(raw as unknown as QuestWindow, today)
+  );
+
+  const ranked = running.map((raw) => {
     const r = raw as unknown as Row;
     const blat = r.business?.latitude ?? null;
     const blng = r.business?.longitude ?? null;

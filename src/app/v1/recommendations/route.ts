@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createApiClient, requireUser } from "@/lib/supabase/api";
 import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 import {
@@ -81,8 +83,34 @@ export async function GET(request: Request) {
     query = query.in("establishment_type", types);
   }
 
-  const { data, error } = await query;
+  const { data: rawData, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // The view knows a quest is live but not whether its dates have run out.
+  // Drop stops whose quest is outside its window (Philippine dates) so an
+  // ended quest can't be rolled, rather than failing later at accept.
+  const questIds = Array.from(
+    new Set(
+      (rawData ?? [])
+        .map((r) => (r as { travel_challenge_id?: string | null }).travel_challenge_id)
+        .filter((v): v is string => !!v)
+    )
+  );
+  let endedQuestIds = new Set<string>();
+  if (questIds.length > 0) {
+    const { data: quests } = await createAdminClient()
+      .from("travel_challenges")
+      .select("id, status, date_range_start, date_range_end")
+      .in("id", questIds);
+    const today = manilaToday();
+    endedQuestIds = new Set(
+      (quests ?? []).filter((q) => !isQuestPlayable(q as QuestWindow, today)).map((q) => q.id as string)
+    );
+  }
+  const data = (rawData ?? []).filter((r) => {
+    const questId = (r as { travel_challenge_id?: string | null }).travel_challenge_id;
+    return !questId || !endedQuestIds.has(questId);
+  });
 
   type Row = {
     id: string;

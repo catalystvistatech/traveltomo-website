@@ -12,6 +12,7 @@ import {
 } from "@/lib/validations/marketplace";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
+import { manilaToday } from "@/lib/quest-dates";
 
 /**
  * Gate for every quest-content action.
@@ -404,6 +405,115 @@ export async function updateTravelChallenge(id: string, input: unknown) {
   });
   revalidatePath("/admin", "layout");
   return { success: true };
+}
+
+/**
+ * Re-point a quest at another of the merchant's businesses (or none).
+ * Touches ONLY business_id. The quest page used to do this through
+ * updateTravelChallenge with a partial record, which nulled the quest's
+ * dates, cover, description, winner cap and big reward.
+ */
+export async function setTravelChallengeBusiness(id: string, businessId: string | null) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  if (!gate.canWrite) return { error: "Read-only access." };
+  const supabase = await createClient();
+
+  if (businessId && gate.scopeId) {
+    const { data: biz } = await supabase
+      .from("businesses")
+      .select("id, verification_status")
+      .eq("id", businessId)
+      .eq("merchant_id", gate.scopeId)
+      .maybeSingle();
+    if (!biz) return { error: "The selected business doesn't belong to you." };
+    if (biz.verification_status !== "approved") return { error: "The selected business is not verified yet." };
+  }
+
+  const query = supabase.from("travel_challenges").update({ business_id: businessId }).eq("id", id);
+  if (gate.scopeId) query.eq("merchant_id", gate.scopeId);
+  const { data: updated, error } = await query.select("id");
+  if (error) return { error: error.message };
+  if (!updated?.length) return { error: "Quest not found, or you don't have permission to edit it." };
+
+  await recordActAsChange(gate.scope, {
+    action: "setTravelChallengeBusiness",
+    entityType: "travel_challenge",
+    entityId: id,
+    after: { business_id: businessId },
+  });
+  revalidatePath("/admin", "layout");
+  return { success: true as const };
+}
+
+/**
+ * Run an ended quest again until `endDate` (YYYY-MM-DD, Philippine date).
+ *
+ * Sets the new last day, puts the quest back to `live`, and closes out the
+ * stops travelers had in flight when it expired: those rows are marked
+ * skipped (with completed_at) so the stops are playable again — an
+ * "expired" row would otherwise keep the stop greyed out for that traveler
+ * and block a fresh accept.
+ */
+export async function renewTravelChallenge(id: string, endDate: string) {
+  const gate = await assertApprovedMerchant();
+  if ("error" in gate) return { error: gate.error };
+  if (!gate.canWrite) return { error: "Read-only access." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { error: "Pick a last day." };
+  const today = manilaToday();
+  if (endDate < today) return { error: "The last day can't be in the past." };
+
+  const supabase = await createClient();
+  const lookup = supabase
+    .from("travel_challenges")
+    .select("id, status, date_range_start")
+    .eq("id", id);
+  if (gate.scopeId) lookup.eq("merchant_id", gate.scopeId);
+  const { data: quest } = await lookup.maybeSingle();
+  if (!quest) return { error: "Quest not found, or you don't have permission to edit it." };
+  if (!["expired", "live", "paused", "approved"].includes(quest.status as string)) {
+    return { error: "Only a published quest can be run again. Publish it first." };
+  }
+
+  const { count } = await supabase
+    .from("challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("travel_challenge_id", id);
+  const stopError = travelChallengePublishStopError(count ?? 0);
+  if (stopError) return { error: stopError };
+
+  const start = quest.date_range_start as string | null;
+  const { error } = await supabase
+    .from("travel_challenges")
+    .update({
+      status: "live",
+      date_range_end: endDate,
+      // A start date after the new end would make the quest unplayable.
+      date_range_start: start && start > endDate ? today : start,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  const admin = createAdminClient();
+  const { data: stops } = await admin.from("challenges").select("id").eq("travel_challenge_id", id);
+  const stopIds = (stops ?? []).map((st) => st.id as string);
+  if (stopIds.length > 0) {
+    await admin
+      .from("challenge_completions")
+      .update({ player_status: "skipped", completed_at: new Date().toISOString() })
+      .in("challenge_id", stopIds)
+      .eq("player_status", "expired")
+      .is("completed_at", null);
+  }
+
+  await recordActAsChange(gate.scope, {
+    action: "renewTravelChallenge",
+    entityType: "travel_challenge",
+    entityId: id,
+    after: { status: "live", date_range_end: endDate },
+  });
+  revalidatePath("/admin", "layout");
+  return { success: true as const };
 }
 
 /**

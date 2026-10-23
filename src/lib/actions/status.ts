@@ -1,5 +1,7 @@
 "use server";
 
+import { isQuestPlayable, manilaToday, questState, type QuestWindow } from "@/lib/quest-window";
+
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/actions/auth";
 
@@ -87,23 +89,37 @@ export async function getRecommendationStatus(): Promise<RecommendationStatus> {
     }
   }
 
-  const { count: liveCountRaw } = await supabase
+  // Count quests that travelers can actually play right now: live AND
+  // inside their dates (Philippine time). Quests past their last day are
+  // counted separately so the dashboard can say "run it again".
+  const { data: liveQuests } = await supabase
     .from("travel_challenges")
-    .select("id", { count: "exact", head: true })
+    .select("status, date_range_start, date_range_end")
     .eq("merchant_id", user.id)
-    .eq("status", "live");
-  const liveTravelChallenges = liveCountRaw ?? 0;
+    .in("status", ["live", "expired"]);
+  const today = manilaToday();
+  const liveTravelChallenges = (liveQuests ?? []).filter((q) =>
+    isQuestPlayable(q as QuestWindow, today)
+  ).length;
+  const endedQuests = (liveQuests ?? []).filter(
+    (q) => questState(q as QuestWindow, today) === "ended"
+  ).length;
 
+  // Only what really decides whether travelers see you. Opening hours and
+  // promotions are shown as tips, not blockers: the traveler-facing quest
+  // and recommendation queries don't filter on either (see view 048).
   const blockers: string[] = [];
   if (!businessVerified) blockers.push("Business not verified by an admin yet");
   if (!hasLocation) blockers.push("Business location not set");
-  if (!hasHours) blockers.push("Operating hours not configured");
-  if (!isOpenNow) blockers.push("Currently outside your operating hours");
-  if (!hasActivePromotion) blockers.push("No active promotion subscription");
-  if (liveTravelChallenges === 0) blockers.push("No live quests yet");
+  if (liveTravelChallenges === 0) {
+    blockers.push(
+      endedQuests > 0
+        ? `Your quest${endedQuests === 1 ? " has" : "s have"} ended — open it and tap "Run it again"`
+        : "No live quests yet — make one in 3 steps"
+    );
+  }
 
-  const isRecommendable =
-    businessVerified && hasLocation && hasHours && isOpenNow && hasActivePromotion && liveTravelChallenges > 0;
+  const isRecommendable = businessVerified && hasLocation && liveTravelChallenges > 0;
 
   return {
     isMerchant: true,

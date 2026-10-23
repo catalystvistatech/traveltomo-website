@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { questState, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient, requireUser } from "@/lib/supabase/api";
 import {
   buildTravelProgressPayload,
@@ -27,6 +28,7 @@ export async function GET(request: Request, { params }: Params) {
     .from("travel_challenges")
     .select(
       `id, title, description, cover_url, completion_mode, status,
+       date_range_start, date_range_end,
        big_reward_title, big_reward_description,
        big_reward_discount_type, big_reward_discount_value,
        business:businesses (
@@ -62,6 +64,13 @@ export async function GET(request: Request, { params }: Params) {
       { error: "This quest is no longer available." },
       { status: 404 }
     );
+  }
+
+  // A quest past its last day (Philippine date) reads as "expired" right
+  // away, before the hourly expiry job flips the row. The iOS preview
+  // already disables Start for status "expired".
+  if (questState(data as unknown as QuestWindow) === "ended") {
+    (data as { status: string }).status = "expired";
   }
 
   type ChildRow = {
@@ -147,6 +156,23 @@ export async function GET(request: Request, { params }: Params) {
       id
     );
     progress = await loadActiveTravelProgress(auth.client, auth.user.id, id);
+    if (!progress) {
+      // No session in play: surface a finished one whose big reward hasn't
+      // been handed over yet, so the app can show "Claim Big Reward".
+      // (Only active sessions were returned before, so a completed quest
+      // looked like a fresh one and its big reward was unreachable.)
+      const { data: completed } = await auth.client
+        .from("travel_challenge_progress")
+        .select("id, status, started_at, completed_at, expires_at, skips_used, skips_limit")
+        .eq("user_id", auth.user.id)
+        .eq("travel_challenge_id", id)
+        .eq("status", "completed")
+        .is("big_reward_redeemed_at", null)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      progress = completed ?? null;
+    }
   }
 
   const childIds = liveChildren.map((c) => c.id);

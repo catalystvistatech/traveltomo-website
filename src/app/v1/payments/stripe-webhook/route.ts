@@ -20,6 +20,14 @@ function periodEndIso(sub: Stripe.Subscription): string | null {
   return typeof unix === "number" ? new Date(unix * 1000).toISOString() : null;
 }
 
+function isTravelerSubscription(sub: Stripe.Subscription): boolean {
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  return (
+    sub.metadata?.plan === "traveler_unlimited" ||
+    (priceId != null && priceId === process.env.STRIPE_PRICE_TRAVELER_UNLIMITED)
+  );
+}
+
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: "stripe_not_configured" }, { status: 503 });
@@ -50,10 +58,7 @@ export async function POST(request: Request) {
     // Traveler "Unlimited Pass" subscriptions carry metadata.plan =
     // 'traveler_unlimited' (or use the dedicated price). These grant the
     // consumer no-ads entitlement, NOT a merchant business-limit plan.
-    const isTraveler =
-      sub.metadata?.plan === "traveler_unlimited" ||
-      (priceId != null &&
-        priceId === process.env.STRIPE_PRICE_TRAVELER_UNLIMITED);
+    const isTraveler = isTravelerSubscription(sub);
 
     if (isTraveler) {
       await admin
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
           is_unlimited: isActive,
           unlimited_status: sub.status,
           unlimited_renews_at: periodEndIso(sub),
+          unlimited_source: "stripe",
           stripe_subscription_id: sub.id,
         })
         .eq("stripe_customer_id", customerId);
@@ -95,19 +101,29 @@ export async function POST(request: Request) {
       await applySubscription(event.data.object as Stripe.Subscription);
       break;
     case "customer.subscription.deleted": {
+      // Only undo what THIS subscription granted. Merchant plans and the
+      // traveler pass are separate products; ending one used to clear both
+      // (and wipe an App Store pass on the same profile).
       const sub = event.data.object as Stripe.Subscription;
       const customerId =
         typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+      if (isTravelerSubscription(sub)) {
+        await admin
+          .from("profiles")
+          .update({ is_unlimited: false, unlimited_status: "canceled", unlimited_renews_at: null })
+          .eq("stripe_customer_id", customerId)
+          .eq("unlimited_source", "stripe");
+      } else {
+        await admin
+          .from("profiles")
+          .update({ plan_code: "free", plan_status: "canceled" })
+          .eq("stripe_customer_id", customerId);
+      }
       await admin
         .from("profiles")
-        .update({
-          plan_code: "free",
-          plan_status: "canceled",
-          is_unlimited: false,
-          unlimited_status: "canceled",
-          stripe_subscription_id: null,
-        })
-        .eq("stripe_customer_id", customerId);
+        .update({ stripe_subscription_id: null })
+        .eq("stripe_customer_id", customerId)
+        .eq("stripe_subscription_id", sub.id);
       break;
     }
     default:
