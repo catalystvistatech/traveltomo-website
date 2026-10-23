@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   PlayerStopStatus,
   TravelProgressStatus,
@@ -237,9 +238,13 @@ function toQuestShape(raw: unknown, consumedFallback: boolean) {
   };
 }
 
-/** Consumes one skip from the caller's global pool. Throws on RPC failure. */
-export async function consumeGlobalSkip(client: SupabaseClient, userId: string) {
-  const { data, error } = await client.rpc("consume_skip_token", {
+/**
+ * Consumes one skip from the caller's global pool. Throws on RPC failure.
+ * The skip functions trust p_user, so they run on the server's client only
+ * (063); callers pass the already-authenticated user's id.
+ */
+export async function consumeGlobalSkip(userId: string) {
+  const { data, error } = await createAdminClient().rpc("consume_skip_token", {
     p_user: userId,
   });
   if (error) throw new Error(error.message);
@@ -247,8 +252,8 @@ export async function consumeGlobalSkip(client: SupabaseClient, userId: string) 
 }
 
 /** Reads the caller's global pool without consuming. */
-export async function globalSkipStatus(client: SupabaseClient, userId: string) {
-  const { data, error } = await client.rpc("skip_token_status", {
+export async function globalSkipStatus(userId: string) {
+  const { data, error } = await createAdminClient().rpc("skip_token_status", {
     p_user: userId,
   });
   if (error) throw new Error(error.message);

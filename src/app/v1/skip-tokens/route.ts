@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/supabase/api";
 
 /** GET /v1/skip-tokens ? returns { free_skips_remaining, extra_skips, next_refill_at } */
 export async function GET(request: Request) {
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
+  // These functions trust p_user, so only the server may call them (063).
+  const client = createAdminClient();
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
@@ -21,7 +24,9 @@ export async function GET(request: Request) {
  * Body: { action: "consume" | "grant_ad" }
  */
 export async function POST(request: Request) {
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
+  // These functions trust p_user, so only the server may call them (063).
+  const client = createAdminClient();
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 

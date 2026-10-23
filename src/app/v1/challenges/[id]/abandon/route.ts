@@ -86,7 +86,7 @@ export async function POST(request: Request, { params }: Params) {
   // subscribers). Non-quest challenges stay free to abandon.
   if (challenge?.travel_challenge_id) {
     try {
-      skipResult = await consumeGlobalSkip(client, user.id);
+      skipResult = await consumeGlobalSkip(user.id);
     } catch (e) {
       // The completion is already skipped; surface the token error
       // without rolling back so the user still gets unstuck.
