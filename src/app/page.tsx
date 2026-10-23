@@ -436,12 +436,15 @@ function Footer() {
 
           {/* Links */}
           <div className="flex items-center gap-6 text-sm text-zinc-500">
-            <a href="#" className="hover:text-white transition-colors">
+            <Link href="/privacy" className="hover:text-white transition-colors">
               Privacy
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
+            </Link>
+            <Link href="/terms" className="hover:text-white transition-colors">
               Terms
-            </a>
+            </Link>
+            <Link href="/help" className="hover:text-white transition-colors">
+              Help
+            </Link>
             <a
               href="mailto:info@traveltomo.app"
               className="hover:text-white transition-colors"
