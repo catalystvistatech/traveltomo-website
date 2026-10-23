@@ -126,6 +126,16 @@ ALTER POLICY "Users update own travel progress" ON public.travel_challenge_progr
 ALTER POLICY "Merchants manage own travel challenges" ON public.travel_challenges USING (((merchant_id = (SELECT auth.uid())) AND (current_user_role() = ANY (ARRAY['merchant'::text, 'admin'::text, 'superadmin'::text])))) WITH CHECK (((merchant_id = (SELECT auth.uid())) AND (current_user_role() = ANY (ARRAY['merchant'::text, 'admin'::text, 'superadmin'::text]))));
 ALTER POLICY "Merchants read own invoices" ON public.xendit_invoices USING (((merchant_id = (SELECT auth.uid())) OR (current_user_role() = ANY (ARRAY['admin'::text, 'superadmin'::text]))));
 
+-- 6. Notification kinds ----------------------------------------------------------
+-- big_reward_redeemed is emitted when a quest's big reward is handed over,
+-- but the CHECK (006) never allowed it, so those inserts failed and the
+-- traveler never got the notification (emitNotification swallows errors).
+
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
+ALTER TABLE public.notifications ADD CONSTRAINT notifications_kind_check
+  CHECK (kind IN ('challenge_unlocked', 'challenge_verified', 'reward_ready',
+                  'big_reward_redeemed', 'merchant_status', 'system'));
+
 -- 5. Indexes ----------------------------------------------------------------------
 
 DROP INDEX IF EXISTS public.idx_travel_challenges_business; -- duplicate of idx_travel_challenges_business_id
