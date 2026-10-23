@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Help & Support — TravelTomo",
+  title: "Help & Support",
   description:
     "Answers to common questions about playing TravelTomo, claiming rewards, the Unlimited Pass, and getting in touch.",
 };
@@ -35,6 +35,10 @@ const FAQS: { q: string; a: string }[] = [
   {
     q: "How do I change my photo or avatar?",
     a: "In the app, open Settings then Edit Profile. Your profile photo is used when set; otherwise your avatar is shown.",
+  },
+  {
+    q: "How do I delete my account?",
+    a: "In the app, open Settings and tap Delete Account. This permanently removes your profile and activity. You can also email us and we'll do it for you.",
   },
   {
     q: "I'm a business — how do I get started?",
