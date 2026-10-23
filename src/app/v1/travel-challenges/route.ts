@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 
 /**
@@ -136,6 +137,26 @@ export async function GET(request: Request) {
   });
 
   const page = filtered.slice(offset, offset + limit);
+
+  // Quests without a cover photo rendered as a plain blue gradient in the
+  // app. Fall back to the business's own place photo (mirrored from Google
+  // by 047) so every card shows the actual place.
+  const needCover = Array.from(
+    new Set(page.filter((r) => !r.cover_url && r.business_id).map((r) => r.business_id as string))
+  );
+  if (needCover.length > 0) {
+    const { data: photos } = await createAdminClient()
+      .from("places")
+      .select("business_id, image_url")
+      .in("business_id", needCover)
+      .not("image_url", "is", null);
+    const photoByBusiness = new Map(
+      (photos ?? []).map((p) => [p.business_id as string, p.image_url as string])
+    );
+    for (const r of page) {
+      if (!r.cover_url && r.business_id) r.cover_url = photoByBusiness.get(r.business_id) ?? null;
+    }
+  }
 
   return NextResponse.json(
     {

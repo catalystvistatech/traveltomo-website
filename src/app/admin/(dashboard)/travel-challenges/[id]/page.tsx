@@ -49,6 +49,7 @@ import {
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X, ImagePlus } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import { manilaToday, questState } from "@/lib/quest-window";
+import { QuestAppPreview } from "@/components/quest-app-card";
 import type { PlacePrediction } from "@/components/business-location-picker";
 import { APIProvider, Map, Marker, useMap } from "@vis.gl/react-google-maps";
 
@@ -570,6 +571,25 @@ export default function TravelChallengeDetailPage({
         </div>
       </div>
 
+      <div className="grid items-start gap-4 md:grid-cols-[360px_1fr]">
+        <QuestAppPreview
+          title={(rec.title as string) ?? ""}
+          bigReward={(rec.big_reward_title as string | null) ?? null}
+          businessName={(rec.business as { name?: string } | null)?.name ?? null}
+          city={(rec.business as { city?: string | null } | null)?.city ?? null}
+          coverUrl={(rec.cover_url as string | null) ?? null}
+        />
+        {!rec.cover_url && (
+          <div className="rounded-xl border border-amber-700/50 bg-amber-900/15 p-4 text-sm text-amber-200 md:mt-6">
+            <p className="font-medium">No cover photo yet — travelers see a plain blue card.</p>
+            <p className="mt-1 text-amber-200/70">A photo of your place gets far more taps.</p>
+            <Button onClick={handleOpenEdit} className="mt-3 gap-2 bg-red-600 text-white hover:bg-red-700">
+              <ImagePlus className="h-4 w-4" /> Add a cover photo
+            </Button>
+          </div>
+        )}
+      </div>
+
       {questState({
         status,
         date_range_start: (rec.date_range_start as string | null) ?? null,
@@ -654,7 +674,7 @@ export default function TravelChallengeDetailPage({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-zinc-300">Header Photo</Label>
+              <Label className="text-zinc-300">Cover photo <span className="text-zinc-500">(shown on the quest card in the app)</span></Label>
               {editCoverPreview || editForm.cover_url ? (
                 <div className="relative w-full h-40 rounded-lg overflow-hidden border border-zinc-700">
                   <img

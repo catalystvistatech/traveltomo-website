@@ -157,6 +157,8 @@ const wizardSchema = z.object({
   title: z.string().trim().min(3, "Quest name needs at least 3 characters").max(120, "Quest name is too long"),
   stopReward: rewardSchema,
   bigReward: rewardSchema,
+  /** Cover photo for the app's quest card (a picked place's photo or an upload). */
+  coverUrl: z.string().url().max(2000).optional(),
   placeIds: z
     .array(z.string().uuid())
     .length(TRAVEL_CHALLENGE_STOP_COUNT, `Pick exactly ${TRAVEL_CHALLENGE_STOP_COUNT} places`)
@@ -198,7 +200,7 @@ export async function createQuestWithWizard(
     const issue = parsed.error.issues[0];
     return { error: issue?.message ?? "Please check your answers." };
   }
-  const { businessId, title, stopReward, bigReward, placeIds } = parsed.data;
+  const { businessId, title, stopReward, bigReward, placeIds, coverUrl } = parsed.data;
 
   const loaded = await loadBusinessForCaller(businessId);
   if ("error" in loaded) return loaded;
@@ -220,6 +222,7 @@ export async function createQuestWithWizard(
     business_id: businessId,
     description: `Visit ${TRAVEL_CHALLENGE_STOP_COUNT} places around ${loaded.business.name} and earn rewards along the way.`,
     completion_mode: "all",
+    cover_url: coverUrl ?? "",
     date_range_start: isoDate(today),
     date_range_end: isoDate(new Date(today.getTime() + 30 * 86_400_000)),
     big_reward_source: "custom",

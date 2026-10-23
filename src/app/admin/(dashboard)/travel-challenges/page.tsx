@@ -320,7 +320,7 @@ export default function TravelChallengesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-300">Header Photo</Label>
+              <Label className="text-zinc-300">Cover photo <span className="text-zinc-500">(shown on the quest card in the app)</span></Label>
               {coverPreview || form.cover_url ? (
                 <div className="relative w-full h-40 rounded-lg overflow-hidden border border-zinc-700">
                   <img
