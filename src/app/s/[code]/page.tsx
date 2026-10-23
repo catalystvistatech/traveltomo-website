@@ -7,7 +7,7 @@ import { parseStampCode } from "@/lib/stamps";
 // app: "Open in TravelTomo" if installed, otherwise the App Store.
 
 export const metadata: Metadata = {
-  title: "Collect a stamp — TravelTomo",
+  title: "Collect a stamp",
   robots: { index: false },
 };
 
