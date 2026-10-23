@@ -3,8 +3,6 @@
 import { useEffect, useState, useTransition } from "react";
 import {
   getBusinesses,
-  upsertBusiness,
-  submitBusinessForVerification,
   deleteBusiness,
   getBusinessAccessState,
 } from "@/lib/actions/business";
@@ -16,40 +14,18 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { BusinessForm } from "./business-form";
 import {
-  ESTABLISHMENT_LABELS,
   ESTABLISHMENT_TYPES,
   DEFAULT_HOURS,
   type EstablishmentType,
   type BusinessHoursInput,
   type ExtendedBusinessInput,
 } from "@/lib/validations/marketplace";
-import {
-  BusinessLocationPicker,
-  type BusinessLocationValue,
-} from "@/components/business-location-picker";
 import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Store, Lock, Clock } from "lucide-react";
-import {
-  MIN_SERVICE_RADIUS_M,
-  MAX_SERVICE_RADIUS_M,
-} from "@/lib/constants/service-radius";
-
-const DAYS: (keyof BusinessHoursInput)[] = [
-  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-];
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   unsubmitted: { label: "Not submitted", className: "border-zinc-700 text-zinc-400" },
@@ -98,225 +74,6 @@ function businessToForm(biz: Record<string, unknown>): ExtendedBusinessInput {
     hours: (biz.hours as BusinessHoursInput) ?? DEFAULT_HOURS,
     google_place_id: (biz.google_place_id as string) ?? "",
   };
-}
-
-function BusinessForm({
-  businessId,
-  initialForm,
-  initialStatus,
-  onSaved,
-  onCancel,
-  isNew,
-}: {
-  businessId?: string;
-  initialForm: ExtendedBusinessInput;
-  initialStatus: string;
-  onSaved: () => void;
-  onCancel: () => void;
-  isNew: boolean;
-}) {
-  const [form, setForm] = useState<ExtendedBusinessInput>(initialForm);
-  const [pending, startTransition] = useTransition();
-
-  function updateHours(day: keyof BusinessHoursInput, patch: Partial<BusinessHoursInput["monday"]>) {
-    setForm({ ...form, hours: { ...form.hours, [day]: { ...form.hours[day], ...patch } } });
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    startTransition(async () => {
-      const result = await upsertBusiness(form, businessId);
-      if ("error" in result) {
-        const err = result.error as Record<string, unknown>;
-        const msg = "_form" in err
-          ? (err._form as string[])[0]
-          : (Object.values(err).flatMap((v) => v as string[])[0] ?? "Please check your inputs and try again.");
-        toast.error(msg);
-      } else {
-        toast.success(isNew ? "Business created." : "Business saved.");
-        onSaved();
-      }
-    });
-  }
-
-  async function handleSubmitForReview() {
-    if (!businessId) return;
-    const r = await submitBusinessForVerification(businessId);
-    if ("error" in r) { toast.error(r.error as string); return; }
-    toast.success("Submitted for verification.");
-    onSaved();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Business Name *</Label>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-            className="bg-zinc-800 border-zinc-700 text-white"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Type *</Label>
-          <Select
-            value={form.establishment_type}
-            onValueChange={(v: string | null) =>
-              v && setForm({ ...form, establishment_type: v as EstablishmentType })
-            }
-          >
-            <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ESTABLISHMENT_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>{ESTABLISHMENT_LABELS[t]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-zinc-300">Description</Label>
-        <Textarea
-          value={form.description ?? ""}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          rows={3}
-          className="bg-zinc-800 border-zinc-700 text-white"
-        />
-      </div>
-
-      <BusinessLocationPicker
-        value={{
-          name: form.name,
-          address: form.address,
-          city: form.city,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          google_place_id: form.google_place_id ?? null,
-        }}
-        onChange={(patch: Partial<BusinessLocationValue>) =>
-          setForm((prev) => ({ ...prev, ...patch }))
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Service Radius (m)</Label>
-          <Input
-            type="number"
-            min={MIN_SERVICE_RADIUS_M}
-            max={MAX_SERVICE_RADIUS_M}
-            step={100}
-            value={form.service_radius_meters}
-            onChange={(e) =>
-              setForm({ ...form, service_radius_meters: parseInt(e.target.value || "0") })
-            }
-            className="bg-zinc-800 border-zinc-700 text-white"
-          />
-          <p className="text-xs text-zinc-500">
-            How far away travelers can be and still see your quests. Minimum{" "}
-            {MIN_SERVICE_RADIUS_M}m — anything smaller and almost no one would
-            ever find you.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Contact Email</Label>
-          <Input
-            type="email"
-            value={form.contact_email ?? ""}
-            onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
-            className="bg-zinc-800 border-zinc-700 text-white"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Contact Phone</Label>
-          <Input
-            value={form.contact_phone ?? ""}
-            onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
-            className="bg-zinc-800 border-zinc-700 text-white"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-zinc-300">Website</Label>
-          <Input
-            type="url"
-            placeholder="https://"
-            value={form.website ?? ""}
-            onChange={(e) => setForm({ ...form, website: e.target.value })}
-            className="bg-zinc-800 border-zinc-700 text-white"
-          />
-        </div>
-      </div>
-
-      <div className="pt-2">
-        <h3 className="text-sm font-semibold text-white mb-3">Business Hours</h3>
-        <div className="rounded-lg border border-zinc-800 divide-y divide-zinc-800">
-          {DAYS.map((d) => {
-            const h = form.hours[d];
-            return (
-              <div key={d} className="flex items-center gap-3 p-3 text-sm">
-                <span className="w-24 capitalize text-zinc-300">{d}</span>
-                <label className="flex items-center gap-2 text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={h.closed}
-                    onChange={(e) => updateHours(d, { closed: e.target.checked })}
-                  />
-                  Closed
-                </label>
-                <Input
-                  type="time"
-                  value={h.open ?? ""}
-                  disabled={h.closed}
-                  onChange={(e) => updateHours(d, { open: e.target.value })}
-                  className="w-28 bg-zinc-800 border-zinc-700 text-white"
-                />
-                <span className="text-zinc-500">–</span>
-                <Input
-                  type="time"
-                  value={h.close ?? ""}
-                  disabled={h.closed}
-                  onChange={(e) => updateHours(d, { close: e.target.value })}
-                  className="w-28 bg-zinc-800 border-zinc-700 text-white"
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 pt-2">
-        <Button type="submit" disabled={pending} className="bg-red-600 hover:bg-red-700 text-white">
-          {pending ? "Saving..." : isNew ? "Create Business" : "Save Changes"}
-        </Button>
-        {!isNew && (initialStatus === "unsubmitted" || initialStatus === "rejected") && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleSubmitForReview}
-            className="border-zinc-700 text-zinc-200"
-          >
-            Submit for Verification
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          className="text-zinc-400 hover:text-white"
-        >
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
 }
 
 type AccessState = Awaited<ReturnType<typeof getBusinessAccessState>>;

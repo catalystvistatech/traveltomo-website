@@ -107,7 +107,10 @@ export async function getBusinesses() {
  */
 export async function upsertBusiness(
   formData: ExtendedBusinessInput,
-  businessId?: string
+  businessId?: string,
+  /** New businesses only: go straight to the verification queue instead
+   *  of a separate "Submit for verification" step. */
+  options: { submitForReview?: boolean } = {}
 ) {
   const parsed = extendedBusinessSchema.safeParse(formData);
   if (!parsed.success) {
@@ -225,18 +228,24 @@ export async function upsertBusiness(
       website: parsed.data.website || null,
       hours: parsed.data.hours,
       google_place_id: parsed.data.google_place_id || null,
-      verification_status: bypass ? "approved" : "unsubmitted",
+      verification_status: bypass ? "approved" : options.submitForReview ? "pending" : "unsubmitted",
     };
     if (bypass) {
       insertPayload.verified_at = now;
       insertPayload.verified_by = user.id;
     }
-    const { error } = await supabase.from("businesses").insert(insertPayload);
+    const { data: created, error } = await supabase
+      .from("businesses")
+      .insert(insertPayload)
+      .select("id")
+      .single();
     if (error) return { error: { _form: [error.message] } };
+    revalidatePath("/admin", "layout");
+    return { success: true, id: created.id as string };
   }
 
   revalidatePath("/admin", "layout");
-  return { success: true };
+  return { success: true, id: businessId };
 }
 
 export async function submitBusinessForVerification(businessId: string) {

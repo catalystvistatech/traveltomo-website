@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   listTravelChallenges,
@@ -35,24 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, ImagePlus, X, Trash2, BookmarkPlus, RotateCcw } from "lucide-react";
+import { Plus, ImagePlus, X, RotateCcw } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { QuestCard } from "./quest-card";
 import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
-
-const STATUS_CLASS: Record<string, string> = {
-  draft: "border-zinc-700 text-zinc-400",
-  pending_review: "border-yellow-600 text-yellow-400",
-  approved: "border-green-600 text-green-400",
-  live: "border-green-500 text-green-300",
-  paused: "border-zinc-600 text-zinc-300",
-  archived: "border-zinc-700 text-zinc-500",
-  rejected: "border-red-600 text-red-400",
-  expired: "border-amber-700 text-amber-400",
-};
 
 type LibraryReward = {
   id: string;
@@ -617,80 +605,36 @@ export default function TravelChallengesPage() {
       <div className="grid gap-3">
         {rows.map((tc) => {
           const rec = tc as Record<string, unknown>;
-          const count = (rec.challenges as { count: number }[] | undefined)?.[0]
-            ?.count ?? 0;
-          const status = ((rec.status as string | null) ?? "draft");
           return (
-            <div key={rec.id as string} className="relative group">
-              <Link href={`/admin/travel-challenges/${rec.id}`}>
-                <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-white">
-                            {rec.title as string}
-                          </h3>
-                          <Badge
-                            variant="outline"
-                            className={STATUS_CLASS[status] ?? STATUS_CLASS.draft}
-                          >
-                            {status.replace("_", " ")}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-zinc-400 line-clamp-2 mt-1">
-                          {(rec.description as string) ?? "--"}
-                        </p>
-                        <p className="text-xs text-zinc-500 mt-2">
-                          <span className={count < TRAVEL_CHALLENGE_STOP_COUNT ? "text-amber-400" : undefined}>
-                            {count} of {TRAVEL_CHALLENGE_STOP_COUNT} stops
-                            {count < TRAVEL_CHALLENGE_STOP_COUNT &&
-                              ` — add ${TRAVEL_CHALLENGE_STOP_COUNT - count} more to publish`}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSaveTemplate(rec.id as string);
-                }}
-                className="absolute top-3 right-12 p-2 rounded-lg text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
-                title="Save as template"
-              >
-                <BookmarkPlus className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDelete(rec.id as string, rec.title as string);
-                }}
-                className="absolute top-3 right-3 p-2 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
-                title="Delete quest"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+            <QuestCard
+              key={rec.id as string}
+              rec={rec}
+              onSaveTemplate={() => handleSaveTemplate(rec.id as string)}
+              onDelete={() => handleDelete(rec.id as string, rec.title as string)}
+            />
           );
         })}
         {rows.length === 0 && (
-          <p className="text-zinc-500 text-sm">
-            No quests yet. Create your first one above.
-          </p>
+          <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 px-6 py-12 text-center">
+            <p className="text-lg font-semibold text-white">No quests yet</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-zinc-400">
+              A quest sends travelers to {TRAVEL_CHALLENGE_STOP_COUNT} places near you, with a
+              reward at each stop and a big reward at the end.
+            </p>
+            <Button
+              onClick={() => router.push("/admin/travel-challenges/new")}
+              className="mt-5 h-11 gap-2 bg-red-600 px-6 text-white hover:bg-red-700"
+            >
+              <Plus className="h-4 w-4" /> Make your first quest
+            </Button>
+          </div>
         )}
       </div>
 
       {questTemplates.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">
-            My Quest Templates
+            Saved quests you can reuse
           </h2>
           <div className="grid gap-2">
             {questTemplates.map((t) => (
@@ -713,7 +657,7 @@ export default function TravelChallengesPage() {
                     onClick={() => handleUseTemplate(t.id as string)}
                     className="bg-red-600 hover:bg-red-700 text-white"
                   >
-                    Create quest
+                    Use again
                   </Button>
                   <Button
                     size="sm"

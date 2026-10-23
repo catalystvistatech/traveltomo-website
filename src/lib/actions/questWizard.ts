@@ -12,17 +12,13 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { resolveMerchantScope, scopeAllowsWrite, type MerchantScope } from "@/lib/actions/scope";
 import { effectiveServiceRadius } from "@/lib/constants/service-radius";
-import {
-  ESTABLISHMENT_TYPES,
-  TRAVEL_CHALLENGE_STOP_COUNT,
-} from "@/lib/validations/marketplace";
+import { establishmentTypeFromCategory } from "@/lib/establishment";
+import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 import {
   addChildChallenge,
   createTravelChallenge,
   submitTravelChallengeForReview,
 } from "@/lib/actions/travelChallenges";
-
-type EstablishmentType = (typeof ESTABLISHMENT_TYPES)[number];
 
 export type WizardPlace = {
   id: string;
@@ -42,23 +38,6 @@ export type WizardPlace = {
  */
 const UNSUITABLE_CATEGORY =
   /clinic|hospital|medical|pharmacy|dentist|school|university|college|government|office|apartment|housing|condominium|guest room|finance|bank|atm|association|organization|business center|transportation|embassy|police|funeral|cemetery/i;
-
-/** Maps a free-text place category onto the app's establishment types. */
-function toEstablishmentType(category: string | null): EstablishmentType {
-  const c = (category ?? "").toLowerCase();
-  if (/coffee|cafe|café|tea house|milk tea/.test(c)) return "cafe";
-  if (/bar|pub|brewery|night ?club/.test(c)) return "bar";
-  if (/restaurant|food|bakery|eatery|diner|grill/.test(c)) return "restaurant";
-  if (/motel/.test(c)) return "motel";
-  if (/hotel|resort|inn|hostel|guest house|lodge/.test(c)) return "hotel";
-  if (/spa|massage|salon|wellness/.test(c)) return "spa";
-  if (/zoo|aquarium|farm|animal/.test(c)) return "animal_themed";
-  if (/store|mall|market|shop|boutique|supermarket/.test(c)) return "shop";
-  if (/park|nature|campground|museum|historic|landmark|beach|falls|lake|entertainment|attraction|tourist|church|shrine|viewpoint/.test(c)) {
-    return "adventure";
-  }
-  return "other";
-}
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -258,7 +237,7 @@ export async function createQuestWithWizard(
       description: `Snap a photo at ${place.name} to prove you were there.`.slice(0, 500),
       type: "photo",
       verification_type: "photo_upload",
-      establishment_type: toEstablishmentType(place.category),
+      establishment_type: establishmentTypeFromCategory(place.category),
       xp_reward: 50,
       radius_meters: 100,
       latitude: place.latitude,
