@@ -14,7 +14,10 @@ import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 
 type Business = { id: string; name: string };
 
-const STAMP_OPTIONS = [5, 6, 8, 10];
+const STAMP_OPTIONS = [2, 3, 5, 6, 8, 10];
+// Same bounds as the stamp_cards CHECK and createStampCard validation.
+const MIN_STAMPS = 2;
+const MAX_STAMPS = 20;
 const FREEBIE_IDEAS = ["Free drink", "Free dessert", "Free meal", "Free coffee"];
 
 export function StampCardsView({ cards, businesses }: { cards: StampCardRow[]; businesses: Business[] }) {
@@ -89,6 +92,7 @@ function CreateCard({
   const business = businesses.find((b) => b.id === businessId);
   const [title, setTitle] = useState(business ? `${business.name} Stamp Card` : "");
   const [stamps, setStamps] = useState(6);
+  const [customStamps, setCustomStamps] = useState(false);
   const [freebie, setFreebie] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [pending, start] = useTransition();
@@ -135,11 +139,37 @@ function CreateCard({
           <Label className="text-zinc-300">How many visits to fill the card?</Label>
           <div className="flex flex-wrap gap-2">
             {STAMP_OPTIONS.map((n) => (
-              <Chip key={n} selected={stamps === n} onClick={() => setStamps(n)}>
+              <Chip
+                key={n}
+                selected={!customStamps && stamps === n}
+                onClick={() => {
+                  setCustomStamps(false);
+                  setStamps(n);
+                }}
+              >
                 {n} stamps
               </Chip>
             ))}
+            <Chip selected={customStamps} onClick={() => setCustomStamps(true)}>
+              Custom
+            </Chip>
           </div>
+          {customStamps && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={MIN_STAMPS}
+                max={MAX_STAMPS}
+                value={stamps}
+                onChange={(e) => setStamps(Number(e.target.value))}
+                aria-label="Number of stamps"
+                className="w-24 border-zinc-700 bg-zinc-800 text-white"
+              />
+              <span className="text-sm text-zinc-400">
+                stamps ({MIN_STAMPS}–{MAX_STAMPS})
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -177,7 +207,14 @@ function CreateCard({
 
         <div className="flex gap-2">
           <Button
-            disabled={pending || freebie.trim().length < 3 || title.trim().length < 3}
+            disabled={
+              pending ||
+              freebie.trim().length < 3 ||
+              title.trim().length < 3 ||
+              !Number.isInteger(stamps) ||
+              stamps < MIN_STAMPS ||
+              stamps > MAX_STAMPS
+            }
             onClick={() =>
               start(async () => {
                 const r = await createStampCard({ businessId, title, stampsRequired: stamps, rewardTitle: freebie, endsAt: endsAt || null });
@@ -274,7 +311,15 @@ function CardItem({ card }: { card: StampCardRow }) {
             <Button
               variant="outline"
               disabled={pending}
-              onClick={() => setStatus("archived")}
+              onClick={() => {
+                if (
+                  confirm(
+                    `Remove "${card.title}"? The printed QR stops working and travelers' progress on this card ends. Use Pause instead if you might bring it back.`
+                  )
+                ) {
+                  setStatus("archived");
+                }
+              }}
               className="gap-1.5 border-zinc-700 text-zinc-400 hover:text-red-300"
             >
               <Trash2 className="h-4 w-4" /> Remove

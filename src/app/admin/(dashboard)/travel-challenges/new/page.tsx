@@ -7,7 +7,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { listMerchantBusinesses } from "@/lib/actions/travelChallenges";
+import { listMerchantBusinesses, uploadTravelChallengeCover } from "@/lib/actions/travelChallenges";
+import { QuestAppPreview } from "@/components/quest-app-card";
 import {
   createQuestWithWizard,
   listWizardPlaces,
@@ -18,11 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Gift, MapPin, Rocket, Trophy } from "lucide-react";
+import { ArrowLeft, Check, Gift, ImagePlus, MapPin, Rocket, Trophy } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 
-type Business = { id: string; name: string; verification_status: string };
+type Business = { id: string; name: string; city: string | null; verification_status: string };
 
 const STOP_REWARD_IDEAS = ["Free drink", "Free dessert", "10% off", "Free snack"];
 const BIG_REWARD_IDEAS = ["Free meal", "Free night's stay", "50% off", "Free souvenir"];
@@ -50,6 +51,10 @@ export default function NewQuestWizardPage() {
   const [placesError, setPlacesError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+  // Cover photo for the quest card in the app. Without one the app shows a
+  // plain blue gradient, so the review step pre-selects a stop's photo.
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   useEffect(() => {
     listMerchantBusinesses().then((list) => {
@@ -111,6 +116,7 @@ export default function NewQuestWizardPage() {
       stopReward: { title: stopReward, type: "freebie" },
       bigReward: { title: bigReward, type: "freebie" },
       placeIds: picked,
+      coverUrl: coverUrl ?? undefined,
     });
     setPublishing(false);
     if ("success" in r) {
@@ -134,7 +140,7 @@ export default function NewQuestWizardPage() {
             <p className="text-zinc-400">
               Quests start at your business. Once it&apos;s verified, come back here.
             </p>
-            <Link href="/admin/profile" className="inline-block text-red-400 hover:text-red-300">
+            <Link href="/admin/business" className="inline-block text-red-400 hover:text-red-300">
               Go to Profile →
             </Link>
           </CardContent>
@@ -179,6 +185,7 @@ export default function NewQuestWizardPage() {
       </ol>
 
       {step === 0 && (
+        <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
         <Card className="bg-zinc-900 border-zinc-800">
           <CardContent className="space-y-8 pt-6">
             {businesses.length > 1 && (
@@ -230,6 +237,17 @@ export default function NewQuestWizardPage() {
             />
           </CardContent>
         </Card>
+        <div className="lg:sticky lg:top-4">
+          <QuestAppPreview
+            title={title}
+            bigReward={bigReward}
+            businessName={business?.name}
+            city={business?.city}
+            coverUrl={coverUrl}
+            hint="You'll pick a cover photo in the last step."
+          />
+        </div>
+        </div>
       )}
 
       {step === 1 && (
@@ -316,6 +334,7 @@ export default function NewQuestWizardPage() {
       )}
 
       {step === 2 && (
+        <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
         <Card className="bg-zinc-900 border-zinc-800">
           <CardContent className="space-y-6 pt-6">
             <div>
@@ -358,6 +377,70 @@ export default function NewQuestWizardPage() {
             </p>
           </CardContent>
         </Card>
+        <div className="space-y-4 lg:sticky lg:top-4">
+          <QuestAppPreview
+            title={title}
+            bigReward={bigReward}
+            businessName={business?.name}
+            city={business?.city}
+            coverUrl={coverUrl}
+          />
+          <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="text-sm font-semibold text-white">Cover photo</p>
+            <div className="grid grid-cols-4 gap-2">
+              {pickedPlaces
+                .filter((p) => p.imageUrl)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setCoverUrl(p.imageUrl)}
+                    aria-pressed={coverUrl === p.imageUrl}
+                    title={p.name}
+                    className={`aspect-square overflow-hidden rounded-lg border-2 ${
+                      coverUrl === p.imageUrl ? "border-red-500" : "border-transparent hover:border-zinc-600"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.imageUrl as string} alt={p.name} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              <label
+                className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed text-[11px] text-zinc-400 hover:text-white ${
+                  coverUrl && !pickedPlaces.some((p) => p.imageUrl === coverUrl)
+                    ? "border-red-500"
+                    : "border-zinc-700"
+                }`}
+              >
+                <ImagePlus className="h-4 w-4" />
+                {uploadingCover ? "Uploading…" : "Upload"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingCover}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingCover(true);
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    const r = await uploadTravelChallengeCover(fd);
+                    setUploadingCover(false);
+                    if ("error" in r) toast.error(r.error as string);
+                    else if (r.url) setCoverUrl(r.url);
+                  }}
+                />
+              </label>
+            </div>
+            {coverUrl && (
+              <button type="button" onClick={() => setCoverUrl(null)} className="text-xs text-zinc-500 underline hover:text-white">
+                Use no photo (plain blue card)
+              </button>
+            )}
+          </div>
+        </div>
+        </div>
       )}
 
       {/* Sticky action bar: the one big button is always in the same place. */}
@@ -388,7 +471,16 @@ export default function NewQuestWizardPage() {
             )}
             {step === 1 && (
               <Button
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  // Default the cover to the first stop with a photo (the
+                  // merchant's own place is listed first) so the card in the
+                  // app isn't a plain gradient unless they choose that.
+                  if (!coverUrl) {
+                    const withPhoto = pickedPlaces.find((p) => p.imageUrl);
+                    if (withPhoto) setCoverUrl(withPhoto.imageUrl);
+                  }
+                  setStep(2);
+                }}
                 disabled={!placesReady}
                 className="bg-red-600 hover:bg-red-700 text-white h-11 px-6 text-base"
               >
