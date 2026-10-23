@@ -50,7 +50,8 @@ export async function GET(request: Request) {
   // recommendations response.
   if (auth.user) {
     const userId = auth.user.id;
-    const client = auth.client;
+    // These functions trust p_user, so only the server may call them (063).
+    const client = createAdminClient();
     void (async () => {
       const { error: touchError } = await client.rpc("touch_user_location", {
         p_user: userId,

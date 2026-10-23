@@ -21,13 +21,13 @@ type Params = { params: Promise<{ id: string }> };
  */
 export async function POST(request: Request, { params }: Params) {
   await params; // id unused: the pool is global, not per-quest
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
   if (error || !user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
   try {
-    const data = await consumeGlobalSkip(client, user.id);
+    const data = await consumeGlobalSkip(user.id);
     return NextResponse.json({ data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "skip failed";

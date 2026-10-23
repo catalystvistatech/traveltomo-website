@@ -99,7 +99,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.guard_privileged_profile_columns() FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.guard_privileged_profile_columns() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS zz_guard_privileged_profile_columns ON public.profiles;
 CREATE TRIGGER zz_guard_privileged_profile_columns
@@ -120,7 +120,7 @@ AS $$
      AND unlimited_renews_at < now() - interval '1 day';
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.expire_storekit_unlimited() FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.expire_storekit_unlimited() FROM PUBLIC, anon, authenticated;
 
 DO $$
 BEGIN

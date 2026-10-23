@@ -80,8 +80,8 @@ ALTER TABLE public.stamp_card_rewards ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Merchants manage own stamp cards" ON public.stamp_cards;
 CREATE POLICY "Merchants manage own stamp cards"
   ON public.stamp_cards FOR ALL TO authenticated
-  USING (merchant_id = auth.uid())
-  WITH CHECK (merchant_id = auth.uid());
+  USING (merchant_id = (SELECT auth.uid()))
+  WITH CHECK (merchant_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "Staff manage all stamp cards" ON public.stamp_cards;
 CREATE POLICY "Staff manage all stamp cards"
@@ -97,7 +97,7 @@ CREATE POLICY "Travelers read active stamp cards"
 DROP POLICY IF EXISTS "Travelers read own stamps" ON public.stamp_card_stamps;
 CREATE POLICY "Travelers read own stamps"
   ON public.stamp_card_stamps FOR SELECT TO authenticated
-  USING (user_id = auth.uid());
+  USING (user_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "Merchants read stamps on own cards" ON public.stamp_card_stamps;
 CREATE POLICY "Merchants read stamps on own cards"
@@ -105,14 +105,14 @@ CREATE POLICY "Merchants read stamps on own cards"
   USING (
     EXISTS (SELECT 1 FROM public.stamp_cards c
             WHERE c.id = card_id
-              AND (c.merchant_id = auth.uid()
+              AND (c.merchant_id = (SELECT auth.uid())
                    OR public.current_user_role() IN ('admin','superadmin')))
   );
 
 DROP POLICY IF EXISTS "Travelers read own stamp rewards" ON public.stamp_card_rewards;
 CREATE POLICY "Travelers read own stamp rewards"
   ON public.stamp_card_rewards FOR SELECT TO authenticated
-  USING (user_id = auth.uid());
+  USING (user_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "Merchants read rewards on own cards" ON public.stamp_card_rewards;
 CREATE POLICY "Merchants read rewards on own cards"
@@ -120,7 +120,7 @@ CREATE POLICY "Merchants read rewards on own cards"
   USING (
     EXISTS (SELECT 1 FROM public.stamp_cards c
             WHERE c.id = card_id
-              AND (c.merchant_id = auth.uid()
+              AND (c.merchant_id = (SELECT auth.uid())
                    OR public.current_user_role() IN ('admin','superadmin')))
   );
 
@@ -232,6 +232,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) TO service_role;

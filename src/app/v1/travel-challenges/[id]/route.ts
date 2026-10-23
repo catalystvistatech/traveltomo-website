@@ -218,7 +218,7 @@ export async function GET(request: Request, { params }: Params) {
     : null;
   if (auth.user && progressPayload) {
     try {
-      const pool = await globalSkipStatus(auth.client, auth.user.id);
+      const pool = await globalSkipStatus(auth.user.id);
       progressPayload = {
         ...progressPayload,
         skips_used: pool.skips_used,
