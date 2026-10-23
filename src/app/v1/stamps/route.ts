@@ -33,8 +33,10 @@ export async function GET(request: Request) {
         .limit(200),
     ]);
   if (stampsError || rewardsError) {
+    // Log the real cause; never send database errors to the app.
+    console.error("GET /v1/stamps failed", (stampsError ?? rewardsError)?.message);
     return NextResponse.json(
-      { error: (stampsError ?? rewardsError)?.message },
+      { error: "failed", message: "Stamps aren't available right now. Please try again in a moment." },
       { status: 500 }
     );
   }

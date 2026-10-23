@@ -299,7 +299,7 @@ export function BusinessForm({
                           type="time"
                           value={h.open ?? ""}
                           onChange={(e) => setHours(d, { open: e.target.value })}
-                          className="w-28 border-zinc-700 bg-zinc-800 text-white"
+                          className="w-36 border-zinc-700 bg-zinc-800 text-white"
                           aria-label={`${d} opening time`}
                         />
                         <span className="text-zinc-500">to</span>
@@ -307,7 +307,7 @@ export function BusinessForm({
                           type="time"
                           value={h.close ?? ""}
                           onChange={(e) => setHours(d, { close: e.target.value })}
-                          className="w-28 border-zinc-700 bg-zinc-800 text-white"
+                          className="w-36 border-zinc-700 bg-zinc-800 text-white"
                           aria-label={`${d} closing time`}
                         />
                       </>
