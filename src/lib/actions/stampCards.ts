@@ -8,10 +8,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveMerchantScope, scopeAllowsWrite } from "@/lib/actions/scope";
 import { recordActAsChange } from "@/lib/actions/actAs";
-import { newStampQrValue, redeemStampReward, stampQrUrl } from "@/lib/stamps";
+import { newStampQrValue, stampQrUrl } from "@/lib/stamps";
 
 export type StampCardRow = {
   id: string;
@@ -145,26 +144,4 @@ export async function setStampCardStatus(id: string, status: "active" | "paused"
   await recordActAsChange(scope, { action: "setStampCardStatus", entityType: "stamp_card", entityId: id, after: { status } });
   revalidatePath("/admin/stamp-cards");
   return { success: true as const };
-}
-
-/** Hand over a freebie: the merchant types the TT-SC-XXXXXX code the traveler shows. */
-export async function redeemStampCode(code: string) {
-  const scope = await resolveMerchantScope();
-  if (!scope) return { error: "Not authenticated" };
-  if (!scopeAllowsWrite(scope)) return { error: "Read-only access." };
-  const normalized = code.trim().toUpperCase();
-  if (!/^TT-SC-[A-Z0-9]{4,}$/.test(normalized)) {
-    return { error: "That doesn't look like a freebie code. It starts with TT-SC-." };
-  }
-  const isStaff = scope.actor.role === "admin" || scope.actor.role === "superadmin";
-  const merchantScopeId = isStaff && !scope.actingAs ? null : scope.merchantId;
-  const result = await redeemStampReward(createAdminClient(), normalized, scope.actor.id, merchantScopeId);
-  if (!result.ok) return { error: result.message };
-  await recordActAsChange(scope, {
-    action: "redeemStampCode",
-    entityType: "stamp_card_reward",
-    entityId: result.rewardId,
-  });
-  revalidatePath("/admin/stamp-cards");
-  return { success: true as const, rewardTitle: result.rewardTitle, cardTitle: result.cardTitle };
 }

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
+import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 
 type Row = Awaited<ReturnType<typeof listPendingCompletions>>[number];
 
@@ -110,10 +111,12 @@ export default function CompletionsPage() {
         </p>
       </div>
 
+      <RedeemCodeBox />
+
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
           <CardTitle className="text-white text-base">
-            Scan or paste verification code
+            Find a visit in the list
           </CardTitle>
           <CardDescription className="text-zinc-400">
             Ask the user to show their code from the app, then verify below.

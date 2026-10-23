@@ -9,12 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  createStampCard,
-  redeemStampCode,
-  setStampCardStatus,
-  type StampCardRow,
-} from "@/lib/actions/stampCards";
+import { createStampCard, setStampCardStatus, type StampCardRow } from "@/lib/actions/stampCards";
+import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 
 type Business = { id: string; name: string };
 
@@ -41,7 +37,7 @@ export function StampCardsView({ cards, businesses }: { cards: StampCardRow[]; b
       </div>
 
       <HowItWorks />
-      <RedeemBox />
+      <RedeemCodeBox />
 
       {showCreate && (
         <CreateCard businesses={businesses} onDone={() => setShowCreate(false)} canCancel={cards.length > 0} />
@@ -58,7 +54,7 @@ function HowItWorks() {
   const steps = [
     { icon: QrCode, title: "Print your QR", text: "Put it on the counter or table." },
     { icon: ScanLine, title: "Travelers scan it", text: "One stamp per visit, only when they're at your shop." },
-    { icon: Gift, title: "Card full = freebie", text: "They show a code; you type it below and hand it over." },
+    { icon: Gift, title: "Card full = freebie", text: "They show a code; type it in the box below and hand it over." },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-3">
@@ -76,46 +72,6 @@ function HowItWorks() {
         </div>
       ))}
     </div>
-  );
-}
-
-function RedeemBox() {
-  const [code, setCode] = useState("");
-  const [pending, start] = useTransition();
-  const router = useRouter();
-  return (
-    <Card className="border-zinc-800 bg-zinc-900">
-      <CardContent className="space-y-2 pt-6">
-        <Label className="text-base text-zinc-200">A traveler is showing a freebie code?</Label>
-        <form
-          className="flex flex-wrap gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            start(async () => {
-              const r = await redeemStampCode(code);
-              if ("error" in r) {
-                toast.error(r.error);
-                return;
-              }
-              toast.success(`Give them: ${r.rewardTitle}. Their card starts fresh.`);
-              setCode("");
-              router.refresh();
-            });
-          }}
-        >
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="TT-SC-XXXXXX"
-            className="h-11 max-w-xs border-zinc-700 bg-zinc-800 font-mono text-lg tracking-wider text-white"
-            autoCapitalize="characters"
-          />
-          <Button type="submit" disabled={pending || code.trim().length < 8} className="h-11 bg-green-600 text-white hover:bg-green-700">
-            {pending ? "Checking…" : "Give freebie"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
   );
 }
 

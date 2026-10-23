@@ -5,7 +5,8 @@ import {
   getAdminOverview,
   getTravelChallengeSummary,
 } from "@/lib/actions/status";
-import { getActiveSubscription } from "@/lib/actions/subscriptions";
+import { countVisitsToApprove } from "@/lib/actions/redeemCode";
+import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 import {
   Card,
   CardContent,
@@ -20,7 +21,6 @@ import {
   CheckCircle2,
   Clock,
   Store,
-  ShieldCheck,
   Megaphone,
   AlertTriangle,
   Users,
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
   // but we also defensively wrap them so a single regression can never
   // crash the dashboard home with a generic "Server Components render"
   // error.
-  const [status, summary, subscription, adminOverview] = await Promise.all([
+  const [status, summary, visitsToApprove, adminOverview] = await Promise.all([
     getRecommendationStatus().catch(() => ({
       isMerchant: false,
       businessVerified: false,
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
       live: 0,
       rejected: 0,
     })),
-    getActiveSubscription().catch(() => null),
+    countVisitsToApprove().catch(() => 0),
     isAdmin ? getAdminOverview().catch(() => null) : Promise.resolve(null),
   ]);
 
@@ -96,6 +96,9 @@ export default async function DashboardPage() {
         </Card>
       )}
 
+      {/* The thing staff do most: hand over a reward to someone at the counter. */}
+      {(status.isMerchant || isAdmin) && <RedeemCodeBox />}
+
       {status.isMerchant && <RecommendationStatusCard status={status} />}
 
       {isAdmin && adminOverview && (
@@ -106,13 +109,6 @@ export default async function DashboardPage() {
             icon={<Store className="h-4 w-4 text-yellow-400" />}
             href="/admin/manage/businesses"
             accent={adminOverview.businessesPending > 0 ? "text-yellow-300" : undefined}
-          />
-          <StatCard
-            title="Pending Quests"
-            value={adminOverview.travelChallengesPending}
-            icon={<ShieldCheck className="h-4 w-4 text-yellow-400" />}
-            href="/admin/manage/travel-challenges"
-            accent={adminOverview.travelChallengesPending > 0 ? "text-yellow-300" : undefined}
           />
           <StatCard
             title="Merchants"
@@ -129,29 +125,26 @@ export default async function DashboardPage() {
       )}
 
       {summary && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <StatCard
-            title="Live Quests"
-            value={summary.live}
+            title="Visits to approve"
+            value={visitsToApprove}
+            icon={<Clock className="h-4 w-4 text-yellow-400" />}
+            href="/admin/completions"
+            accent={visitsToApprove > 0 ? "text-yellow-300" : undefined}
+          />
+          <StatCard
+            title="Live quests"
+            value={status.isMerchant ? status.liveTravelChallenges : summary.live}
             icon={<Eye className="h-4 w-4 text-green-400" />}
+            href="/admin/travel-challenges"
             accent="text-green-400"
           />
           <StatCard
-            title="Pending Review"
-            value={summary.pending}
-            icon={<Clock className="h-4 w-4 text-yellow-400" />}
-            accent="text-yellow-300"
-          />
-          <StatCard
-            title="Drafts"
+            title="Drafts to finish"
             value={summary.draft}
             icon={<Trophy className="h-4 w-4 text-zinc-400" />}
-          />
-          <StatCard
-            title="Rejected"
-            value={summary.rejected}
-            icon={<AlertTriangle className="h-4 w-4 text-red-400" />}
-            accent={summary.rejected > 0 ? "text-red-400" : undefined}
+            href="/admin/travel-challenges"
           />
         </div>
       )}
@@ -161,33 +154,22 @@ export default async function DashboardPage() {
           <CardTitle className="text-white">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Link href="/admin/travel-challenges">
-            <Button className="bg-red-600 hover:bg-red-700">
-              Manage Quests
-            </Button>
+          <Link href="/admin/travel-challenges/new">
+            <Button className="bg-red-600 hover:bg-red-700">Make a quest</Button>
           </Link>
-          <Link href="/admin/business">
-            <Button
-              variant="outline"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            >
-              Business Profile
+          <Link href="/admin/stamp-cards">
+            <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Stamp cards
             </Button>
           </Link>
           <Link href="/admin/completions">
-            <Button
-              variant="outline"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            >
-              Verify Completions
+            <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Approve visits{visitsToApprove > 0 ? ` (${visitsToApprove})` : ""}
             </Button>
           </Link>
-          <Link href="/admin/promote">
-            <Button
-              variant="outline"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            >
-              {subscription ? "Manage Promotion" : "Start Promotion"}
+          <Link href="/admin/business">
+            <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Business profile
             </Button>
           </Link>
         </CardContent>
@@ -287,28 +269,21 @@ function RecommendationStatusCard({
 }: {
   status: Awaited<ReturnType<typeof getRecommendationStatus>>;
 }) {
+  // Only what actually decides visibility (see getRecommendationStatus).
   const items = [
     {
       ok: status.businessVerified,
-      label: `Business verified (${status.businessVerificationStatus ?? "none"})`,
+      label: status.businessVerified ? "Business verified" : "Waiting for business verification",
       href: "/admin/business",
     },
     { ok: status.hasLocation, label: "Location set on map", href: "/admin/business" },
-    { ok: status.hasHours, label: "Operating hours configured", href: "/admin/business" },
-    {
-      ok: status.isOpenNow,
-      label: "Currently within operating hours",
-      href: "/admin/business",
-    },
-    {
-      ok: status.hasActivePromotion,
-      label: "Active promotion subscription",
-      href: "/admin/promote",
-    },
     {
       ok: status.liveTravelChallenges > 0,
-      label: `${status.liveTravelChallenges} live quest(s)`,
-      href: "/admin/travel-challenges",
+      label:
+        status.liveTravelChallenges > 0
+          ? `${status.liveTravelChallenges} live quest${status.liveTravelChallenges === 1 ? "" : "s"}`
+          : status.blockers.find((b) => b.startsWith("Your quest")) ?? "Make your first quest",
+      href: status.liveTravelChallenges > 0 ? "/admin/travel-challenges" : "/admin/travel-challenges/new",
     },
   ];
 
@@ -324,11 +299,10 @@ function RecommendationStatusCard({
         <div>
           <CardTitle className="text-white flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-red-400" />
-            Recommendation Status
+            Can travelers find you?
           </CardTitle>
           <p className="text-xs text-zinc-400 mt-1">
-            Everything that must be true for your challenges to appear in the
-            traveler app.
+            All three must be green for your quests to show in the app.
           </p>
         </div>
         <Badge
@@ -342,7 +316,7 @@ function RecommendationStatusCard({
         </Badge>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid gap-2 md:grid-cols-3">
           {items.map((it) => (
             <Link
               key={it.label}
