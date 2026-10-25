@@ -55,7 +55,7 @@ export async function lookupCode(raw: string): Promise<{ preview: CodePreview } 
   if (code.startsWith(STAMP_REWARD_PREFIX)) {
     const { data } = await admin
       .from("stamp_card_rewards")
-      .select("reward_title, redeemed_at, user:profiles!stamp_card_rewards_user_id_fkey ( display_name ), card:stamp_cards!inner ( title, merchant_id )")
+      .select("reward_title, redeemed_at, expires_at, user:profiles!stamp_card_rewards_user_id_fkey ( display_name ), card:stamp_cards!inner ( title, merchant_id )")
       .eq("claim_code", code)
       .maybeSingle();
     const card = (data as unknown as { card?: { title: string; merchant_id: string } } | null)?.card;
@@ -71,7 +71,10 @@ export async function lookupCode(raw: string): Promise<{ preview: CodePreview } 
         context: `Full stamp card · ${card.title}`,
         proofUrl: null,
         done: !!data.redeemed_at,
-        blockedReason: null,
+        blockedReason:
+          data.expires_at && new Date(data.expires_at as string).getTime() < Date.now()
+            ? "This freebie has expired."
+            : null,
       },
     };
   }

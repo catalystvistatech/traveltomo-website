@@ -13,7 +13,7 @@ export default async function StampPosterPage({ params }: { params: Promise<{ id
   const supabase = await createClient();
   const { data: card } = await supabase
     .from("stamp_cards")
-    .select("title, stamps_required, reward_title, qr_code_value, business:businesses ( name )")
+    .select("title, stamps_required, reward_title, qr_code_value, stamp_method, welcome_bonus, business:businesses ( name )")
     .eq("id", id)
     .eq("merchant_id", scope.merchantId)
     .maybeSingle();
@@ -41,12 +41,15 @@ export default async function StampPosterPage({ params }: { params: Promise<{ id
         <p className="text-sm font-semibold uppercase tracking-widest text-red-600">TravelTomo Stamp Card</p>
         <h1 className="text-4xl font-extrabold">{businessName}</h1>
         <p className="text-2xl">
-          Scan on every visit.
+          {card.stamp_method === "staff_pin" ? "Scan when you order — our staff will stamp it." : "Scan on every visit."}
           <br />
           <span className="font-bold">
             {card.stamps_required} stamps = {card.reward_title}!
           </span>
         </p>
+        {card.welcome_bonus > 0 && (
+          <p className="text-lg font-semibold text-green-700">First visit? Get a bonus stamp to start!</p>
+        )}
         <div
           className="mx-auto w-72 [&_svg]:h-auto [&_svg]:w-full"
           // QR markup generated server-side by the qrcode library from our own URL.

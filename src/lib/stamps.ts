@@ -23,6 +23,12 @@ export function newStampQrValue() {
   return `${STAMP_QR_PREFIX}${body}`;
 }
 
+/** A random 4-digit staff stamp code, e.g. "4821". */
+export function newStaffPin() {
+  const n = crypto.getRandomValues(new Uint16Array(1))[0] % 10000;
+  return n.toString().padStart(4, "0");
+}
+
 /**
  * Accepts whatever the scanner read — the bare code or the full URL — and
  * returns the card code, or null if it isn't a stamp QR at all.
@@ -40,12 +46,15 @@ export type CollectStampError =
   | "ended"
   | "too_far"
   | "location_required"
-  | "cooldown";
+  | "cooldown"
+  | "pin_required"
+  | "wrong_pin"
+  | "pin_locked";
 
 /** Traveler-facing explanation for a refused scan. */
 export function stampErrorMessage(
   error: CollectStampError | string,
-  extra?: { retry_at?: string; distance_m?: number }
+  extra?: { retry_at?: string; distance_m?: number; attempts_left?: number }
 ): string {
   switch (error) {
     case "not_found":
@@ -64,6 +73,14 @@ export function stampErrorMessage(
       return "Turn on location so we can confirm you're at the shop.";
     case "cooldown":
       return "You already got a stamp here recently. Come back on your next visit!";
+    case "pin_required":
+      return "Ask the staff to enter the stamp code.";
+    case "wrong_pin":
+      return extra?.attempts_left != null && extra.attempts_left <= 2
+        ? `That code isn't right. ${extra.attempts_left} ${extra.attempts_left === 1 ? "try" : "tries"} left before a 15-minute pause.`
+        : "That code isn't right. Ask the staff to try again.";
+    case "pin_locked":
+      return "Too many wrong codes. Please wait 15 minutes, then ask the staff again.";
     default:
       return "Couldn't collect the stamp. Please try again.";
   }
@@ -71,7 +88,7 @@ export function stampErrorMessage(
 
 export type RedeemResult =
   | { ok: true; rewardTitle: string; cardTitle: string; userId: string; rewardId: string }
-  | { ok: false; error: "not_found" | "forbidden" | "already_redeemed" | "failed"; message: string };
+  | { ok: false; error: "not_found" | "forbidden" | "already_redeemed" | "expired" | "failed"; message: string };
 
 /**
  * Marks a stamp-card freebie (TT-SC-XXXXXX) as handed over. Only the card's
@@ -86,7 +103,7 @@ export async function redeemStampReward(
 ): Promise<RedeemResult> {
   const { data: row, error } = await admin
     .from("stamp_card_rewards")
-    .select("id, user_id, reward_title, redeemed_at, card:stamp_cards!inner ( id, title, merchant_id )")
+    .select("id, user_id, reward_title, redeemed_at, expires_at, card:stamp_cards!inner ( id, title, merchant_id )")
     .eq("claim_code", code.trim().toUpperCase())
     .maybeSingle();
   if (error) return { ok: false, error: "failed", message: error.message };
@@ -98,6 +115,9 @@ export async function redeemStampReward(
   }
   if (row.redeemed_at) {
     return { ok: false, error: "already_redeemed", message: "This freebie was already given out." };
+  }
+  if (row.expires_at && new Date(row.expires_at as string).getTime() < Date.now()) {
+    return { ok: false, error: "expired", message: "This freebie has expired." };
   }
 
   // Conditional update so two staff scanning the same code can't both win.

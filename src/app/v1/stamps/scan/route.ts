@@ -6,7 +6,7 @@ import { parseStampCode, stampErrorMessage } from "@/lib/stamps";
 
 /**
  * POST /v1/stamps/scan
- * Body: { code: string, latitude?: number, longitude?: number }
+ * Body: { code: string, latitude?: number, longitude?: number, pin?: string, count?: number }
  *
  * Traveler scanned a business's stamp-card QR. `code` may be the bare
  * TT-ST-… value or the full URL the QR encodes. Every rule (card active and
@@ -26,6 +26,10 @@ export async function POST(request: Request) {
     code?: string;
     latitude?: number;
     longitude?: number;
+    /** 4-digit staff stamp code (cards using staff confirmation). */
+    pin?: string;
+    /** Stamps the staff chose to give this visit (1..max_stamps_per_visit). */
+    count?: number;
   };
   const code = parseStampCode(body.code ?? "");
   if (!code) {
@@ -43,6 +47,8 @@ export async function POST(request: Request) {
     p_user_id: user.id,
     p_latitude: lat,
     p_longitude: lng,
+    p_pin: typeof body.pin === "string" ? body.pin.trim() : null,
+    p_count: Number.isInteger(body.count) ? body.count : 1,
   });
   if (error) {
     console.error("collect_stamp failed", error.message);
@@ -56,17 +62,24 @@ export async function POST(request: Request) {
     required?: number;
     retry_at?: string;
     distance_m?: number;
-    reward?: { id: string; claim_code: string; reward_title: string } | null;
+    attempts_left?: number;
+    max_stamps_per_visit?: number;
+    added?: number;
+    bonus?: number;
+    rewards?: { id: string; claim_code: string; reward_title: string; expires_at: string | null }[];
   };
 
   if (!r.ok) {
-    const status = r.error === "not_found" ? 404 : r.error === "cooldown" ? 429 : 409;
+    const status =
+      r.error === "not_found" ? 404 : r.error === "cooldown" || r.error === "pin_locked" ? 429 : r.error === "pin_required" ? 428 : r.error === "wrong_pin" ? 403 : 409;
     return NextResponse.json(
       {
         error: r.error,
         message: stampErrorMessage(r.error ?? "failed", r),
         retry_at: r.retry_at ?? null,
         distance_m: r.distance_m ?? null,
+        attempts_left: r.attempts_left ?? null,
+        max_stamps_per_visit: r.max_stamps_per_visit ?? null,
       },
       { status }
     );
@@ -78,14 +91,15 @@ export async function POST(request: Request) {
     .eq("qr_code_value", code)
     .maybeSingle();
 
-  if (r.reward) {
+  const rewards = r.rewards ?? [];
+  if (rewards.length > 0) {
     await emitNotification({
       userId: user.id,
       kind: "reward_ready",
       title: "Stamp card complete!",
-      body: `You earned ${r.reward.reward_title}. Show your code at the counter to claim it.`,
+      body: `You earned ${rewards[0].reward_title}. Show your code at the counter to claim it.`,
       icon: "gift.fill",
-      metadata: { stamp_reward_id: r.reward.id, stamp_card_id: card?.id ?? null },
+      metadata: { stamp_reward_id: rewards[0].id, stamp_card_id: card?.id ?? null },
     });
   }
 
@@ -93,7 +107,11 @@ export async function POST(request: Request) {
     data: {
       stamps: r.stamps ?? 0,
       required: r.required ?? card?.stamps_required ?? 0,
-      reward: r.reward ?? null,
+      added: r.added ?? 1,
+      bonus: r.bonus ?? 0,
+      rewards,
+      // Older app builds read a single `reward`.
+      reward: rewards[0] ?? null,
       card,
     },
   });
