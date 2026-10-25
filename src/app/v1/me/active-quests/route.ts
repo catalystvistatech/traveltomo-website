@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { isQuestPlayable, manilaToday } from "@/lib/quest-dates";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export const dynamic = "force-dynamic";
 
@@ -138,7 +139,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(
-    { data },
+    { data: withFreshPhotos(data) },
     { headers: { "Cache-Control": "private, max-age=10" } }
   );
 }

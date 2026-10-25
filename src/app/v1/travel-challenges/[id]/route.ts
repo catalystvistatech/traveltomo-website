@@ -8,6 +8,7 @@ import {
   loadActiveTravelProgress,
   loadStopCompletionsForTravelChallenge,
 } from "@/lib/challenge-progress";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -229,7 +230,7 @@ export async function GET(request: Request, { params }: Params) {
     }
   }
 
-  return NextResponse.json({
+  return NextResponse.json(withFreshPhotos({
     data: {
       id: row.id,
       title: row.title,
@@ -250,7 +251,7 @@ export async function GET(request: Request, { params }: Params) {
       progress: progressPayload,
       children,
     },
-  }, {
+  }), {
     // The body carries per-user `progress` + per-stop `player_status`,
     // so we can't share it across users. Private cache lets the iOS
     // URLCache absorb the quest-preview re-opens that fire during

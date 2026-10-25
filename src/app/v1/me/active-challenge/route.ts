@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
 import { guardQuestPlayable } from "@/lib/quest-dates";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export const dynamic = "force-dynamic";
 
@@ -160,7 +161,7 @@ export async function GET(request: Request) {
         ? {
             id: challenge.travel_challenge.id,
             title: challenge.travel_challenge.title,
-            cover_url: challenge.travel_challenge.cover_url,
+            cover_url: withFreshPhotos(challenge.travel_challenge.cover_url),
           }
         : null,
     },

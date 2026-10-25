@@ -15,14 +15,13 @@
  * API reference: https://developers.google.com/maps/documentation/places/web-service/nearby-search
  */
 
+import { placePhotoUrl } from "@/lib/google/photo-url";
+
 const GOOGLE_NEARBY_URL =
   "https://places.googleapis.com/v1/places:searchNearby";
 
 const GOOGLE_SEARCH_TEXT_URL =
   "https://places.googleapis.com/v1/places:searchText";
-
-const GOOGLE_PHOTO_MEDIA = (name: string) =>
-  `https://places.googleapis.com/v1/${name}/media`;
 
 const GOOGLE_PLACE_DETAILS_URL = (placeId: string) =>
   `https://places.googleapis.com/v1/places/${placeId}`;
@@ -127,18 +126,17 @@ function apiKey(): string {
   return key;
 }
 
+/**
+ * Our stable photo link for a place (see /v1/places/photo). Google's own
+ * photo links expire and embed the API key, so they are never stored.
+ */
 function photoURL(
+  placeId: string,
   photoName: string | undefined,
   maxWidth = 480,
 ): string | null {
   if (!photoName) return null;
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) return null;
-  const qs = new URLSearchParams({
-    maxWidthPx: String(maxWidth),
-    key,
-  });
-  return `${GOOGLE_PHOTO_MEDIA(photoName)}?${qs.toString()}`;
+  return placePhotoUrl(placeId, maxWidth);
 }
 
 function cityFromComponents(
@@ -195,7 +193,7 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
     latitude: lat,
     longitude: lng,
     category: categoryFromTypes(result.primaryType, result.types),
-    image_url: photoURL(result.photos?.[0]?.name),
+    image_url: photoURL(result.id, result.photos?.[0]?.name),
     city: cityFromComponents(result.addressComponents),
     rating: typeof result.rating === "number" ? result.rating : null,
     user_ratings_total:
@@ -229,7 +227,7 @@ export async function googlePlaceEnrichment(placeId: string): Promise<{
     if (!response.ok) return null;
     const data = (await response.json()) as GooglePlaceNew;
     return {
-      image_url: photoURL(data.photos?.[0]?.name),
+      image_url: photoURL(placeId, data.photos?.[0]?.name),
       rating: typeof data.rating === "number" ? data.rating : null,
       user_ratings_total:
         typeof data.userRatingCount === "number" ? data.userRatingCount : null,

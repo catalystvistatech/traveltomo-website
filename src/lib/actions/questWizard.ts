@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveMerchantScope, scopeAllowsWrite, type MerchantScope } from "@/lib/actions/scope";
 import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 import { establishmentTypeFromCategory } from "@/lib/establishment";
+import { freshPhotoUrl } from "@/lib/google/photo-url";
 import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
 import {
   addChildChallenge,
@@ -116,7 +117,7 @@ async function placesAround(business: LoadedBusiness): Promise<WizardPlace[]> {
           id: p.id as string,
           name: p.name as string,
           category: (p.category as string | null) ?? null,
-          imageUrl: (p.image_url as string | null) ?? null,
+          imageUrl: freshPhotoUrl(p.image_url as string | null),
           latitude: p.latitude as number,
           longitude: p.longitude as number,
           distanceMeters: Math.round(distanceMeters),

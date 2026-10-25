@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient } from "@/lib/supabase/api";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { effectiveServiceRadius } from "@/lib/constants/service-radius";
+import { discoveryRadiusMeters, inServiceArea } from "@/lib/constants/discovery-radius";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 /**
- * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
+ * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=150
  *
- * Returns live travel challenges near a given coordinate. A challenge is
- * only included when the caller falls within its business's own
- * `service_radius_meters` — the radius the merchant configured in
- * Business Profile. The optional `max_radius_km` is a hard ceiling so a
- * misconfigured 100 km business doesn't pollute everyone's home feed
- * (defaults to 20 km).
+ * Returns live travel challenges near a given coordinate, using the same
+ * reach as `/v1/featured` (see constants/discovery-radius.ts) so the two
+ * lists never contradict each other. Quests whose business service area
+ * the caller is already inside come first (`in_area: true`), then the rest
+ * nearest-first.
  *
  * Supports cursor-based pagination via `offset` + `limit`.
  */
@@ -22,8 +22,7 @@ export async function GET(request: Request) {
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0") || 0, 0);
-  const maxRadiusKm = parseFloat(searchParams.get("max_radius_km") ?? "20");
-  const maxRadiusMeters = maxRadiusKm * 1000;
+  const maxRadiusMeters = discoveryRadiusMeters(searchParams.get("max_radius_km"));
 
   const supabase = createApiClient(request);
 
@@ -39,7 +38,10 @@ export async function GET(request: Request) {
        children:challenges!travel_challenge_id ( id )`
     )
     .eq("status", "live")
-    .limit(limit * 3);
+    .is("deleted_at", null)
+    // Distance filtering and sorting happen below, so read enough rows for
+    // the nearest quests to always be in the set (same bound as Featured).
+    .limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -109,28 +111,18 @@ export async function GET(request: Request) {
       establishment_type: r.business?.establishment_type ?? null,
       distance_meters: distance,
       service_radius_meters: businessRadius,
+      in_area: inServiceArea(distance, businessRadius),
     };
   });
 
-  // A challenge is in-range when the caller falls within the business's
-  // own service radius (capped by max_radius_km so a 100 km business
-  // doesn't reach into every city). When no coordinate is provided, we
-  // return everything so the screen has *something* to show.
+  // Same reach as Featured. Without a coordinate, return everything so the
+  // screen has *something* to show.
   const filtered = hasCoord
-    ? ranked.filter((r) => {
-        if (r.distance_meters == null) return false;
-        // Floor as well as ceiling: a merchant who set an unusably small
-        // radius (prod had one at 100 m) would otherwise be invisible to
-        // everyone, with nothing in the product telling them why.
-        const effectiveRadius = effectiveServiceRadius(
-          r.service_radius_meters,
-          maxRadiusMeters
-        );
-        return r.distance_meters <= effectiveRadius;
-      })
+    ? ranked.filter((r) => r.distance_meters != null && r.distance_meters <= maxRadiusMeters)
     : ranked;
 
   filtered.sort((a, b) => {
+    if (a.in_area !== b.in_area) return a.in_area ? -1 : 1;
     const da = a.distance_meters ?? Number.POSITIVE_INFINITY;
     const db = b.distance_meters ?? Number.POSITIVE_INFINITY;
     return da - db;
@@ -160,7 +152,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json(
     {
-      data: page,
+      data: withFreshPhotos(page),
       count: page.length,
       total: filtered.length,
       has_more: offset + limit < filtered.length,
