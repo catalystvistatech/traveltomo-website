@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { isQuestPlayable, manilaToday } from "@/lib/quest-dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/supabase/api";
+import { withFreshPhotos } from "@/lib/google/photo-url";
+import { discoveryRadiusMeters } from "@/lib/constants/discovery-radius";
 
 /**
  * GET /v1/featured?lat=..&lng=..&limit=8&max_radius_km=150
@@ -18,13 +20,9 @@ import { requireUser } from "@/lib/supabase/api";
  * small local merchants beneath tourist landmarks. Merchants could never win
  * that rail no matter how it was tuned.
  *
- * Radius rule — deliberately WIDER than `/v1/travel-challenges`. That endpoint
- * gates on each business's own `service_radius_meters` (often 100 m–2 km),
- * which is right for "quests you can play right now" but would leave the
- * Featured rail empty — and therefore hide the top section of Home — for
- * anyone not standing in one of the few merchant towns. Featured instead uses
- * one generous ceiling and sorts nearest-first, so a user in a nearby city
- * still discovers real merchants.
+ * Radius rule — shared with `/v1/travel-challenges` (see
+ * constants/discovery-radius.ts), so a featured merchant's quest is always
+ * also in the Quests list. Sorted nearest-first.
  *
  * Ranking: active promotion tier first, then distance, then quest recency.
  * The promotion term is promotion-OPTIONAL: with no active subscriptions
@@ -38,8 +36,6 @@ import { requireUser } from "@/lib/supabase/api";
  * business approved, quest live and not soft-deleted.
  */
 
-/** Generous default so the rail isn't empty outside merchant towns. */
-const DEFAULT_MAX_RADIUS_KM = 150;
 const DEFAULT_LIMIT = 8;
 /** Upper bound on rows scanned before distance filtering + dedupe. */
 const MAX_SCAN_ROWS = 500;
@@ -63,10 +59,7 @@ export async function GET(request: Request) {
     Math.max(parseInt(searchParams.get("limit") ?? `${DEFAULT_LIMIT}`) || DEFAULT_LIMIT, 1),
     20
   );
-  const maxRadiusKm =
-    parseFloat(searchParams.get("max_radius_km") ?? `${DEFAULT_MAX_RADIUS_KM}`) ||
-    DEFAULT_MAX_RADIUS_KM;
-  const maxRadiusMeters = maxRadiusKm * 1000;
+  const maxRadiusMeters = discoveryRadiusMeters(searchParams.get("max_radius_km"));
 
   const supabase = createAdminClient();
 
@@ -240,7 +233,7 @@ export async function GET(request: Request) {
     ];
   });
 
-  // One generous ceiling instead of the per-business service radius.
+  // Same reach as the Quests list.
   const inRange = hasCoord
     ? mapped.filter(
         (r) => r.distance_meters != null && r.distance_meters <= maxRadiusMeters
@@ -270,7 +263,7 @@ export async function GET(request: Request) {
     .map(({ _rank, ...row }) => row); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   return NextResponse.json(
-    { data: page, count: page.length, total: deduped.length },
+    { data: withFreshPhotos(page), count: page.length, total: deduped.length },
     { headers: CACHE_HEADERS }
   );
 }

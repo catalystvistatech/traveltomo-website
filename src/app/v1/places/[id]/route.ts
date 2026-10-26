@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createApiClient } from "@/lib/supabase/api";
 import { hydrateMissingPlacePhotos } from "@/lib/google/placesCache";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export const dynamic = "force-dynamic";
 
@@ -194,10 +195,10 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  return NextResponse.json({
+  return NextResponse.json(withFreshPhotos({
     data: {
       ...place,
       challenges,
     },
-  });
+  }));
 }

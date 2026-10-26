@@ -13,6 +13,7 @@ import {
   mirrorPlaces,
 } from "@/lib/google/placesCache";
 import { annotateHasLiveChallenges } from "@/lib/places-challenge-flags";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +105,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(
           {
-            data: page,
+            data: withFreshPhotos(page),
             count: page.length,
             total: sorted.length,
             offset,
@@ -157,7 +158,7 @@ export async function GET(request: Request) {
 
       return NextResponse.json(
         {
-          data: page,
+          data: withFreshPhotos(page),
           count: page.length,
           total: sorted.length,
           offset,
@@ -209,7 +210,7 @@ export async function GET(request: Request) {
   const dbPage = await annotateHasLiveChallenges(dbRows);
 
   return NextResponse.json({
-    data: dbPage,
+    data: withFreshPhotos(dbPage),
     count: dbPage.length,
     source: "db",
     ...(googleError ? { google_error: googleError } : {}),

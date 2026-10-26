@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 /**
  * GET /v1/favorites
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     rating: r.places?.rating ?? null,
   }));
 
-  return NextResponse.json({ data: favorites });
+  return NextResponse.json({ data: withFreshPhotos(favorites) });
 }
 
 /**
