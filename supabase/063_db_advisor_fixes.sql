@@ -76,8 +76,8 @@ GRANT EXECUTE ON FUNCTION public.unread_notification_count(p_user uuid) TO servi
 -- Functions added in 060/062 (their own revokes missed PUBLIC).
 DO $$
 BEGIN
-  IF to_regprocedure('public.collect_stamp(text, uuid, double precision, double precision)') IS NOT NULL THEN
-    REVOKE ALL ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC, anon, authenticated;
+  IF to_regprocedure('public.collect_stamp(text, uuid, double precision, double precision, text, integer)') IS NOT NULL THEN
+    REVOKE ALL ON FUNCTION public.collect_stamp(TEXT, UUID, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, INTEGER) FROM PUBLIC, anon, authenticated;
   END IF;
   IF to_regprocedure('public.expire_storekit_unlimited()') IS NOT NULL THEN
     REVOKE ALL ON FUNCTION public.expire_storekit_unlimited() FROM PUBLIC, anon, authenticated;

@@ -4,12 +4,12 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Gift, Pause, Play, Printer, QrCode, ScanLine, Stamp, Trash2 } from "lucide-react";
+import { Gift, KeyRound, Pause, Play, Printer, QrCode, RefreshCw, ScanLine, Stamp, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createStampCard, setStampCardStatus, type StampCardRow } from "@/lib/actions/stampCards";
+import { createStampCard, rotateStampCardPin, setStampCardStatus, type StampCardRow } from "@/lib/actions/stampCards";
 import { RedeemCodeBox } from "@/components/dashboard/redeem-code-box";
 
 type Business = { id: string; name: string };
@@ -56,7 +56,7 @@ export function StampCardsView({ cards, businesses }: { cards: StampCardRow[]; b
 function HowItWorks() {
   const steps = [
     { icon: QrCode, title: "Print your QR", text: "Put it on the counter or table." },
-    { icon: ScanLine, title: "Travelers scan it", text: "One stamp per visit, only when they're at your shop." },
+    { icon: ScanLine, title: "Travelers scan it", text: "Then your staff type the 4-digit stamp code on their phone — only real purchases count." },
     { icon: Gift, title: "Card full = freebie", text: "They show a code; type it in the box below and hand it over." },
   ];
   return (
@@ -95,6 +95,9 @@ function CreateCard({
   const [customStamps, setCustomStamps] = useState(false);
   const [freebie, setFreebie] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [stampMethod, setStampMethod] = useState<"staff_pin" | "self_scan">("staff_pin");
+  const [welcomeBonus, setWelcomeBonus] = useState(true);
+  const [validDays, setValidDays] = useState<number | null>(30);
   const [pending, start] = useTransition();
 
   if (businesses.length === 0) {
@@ -189,6 +192,70 @@ function CreateCard({
           />
         </div>
 
+        <div className="space-y-2">
+          <Label className="text-zinc-300">How do customers get a stamp?</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setStampMethod("staff_pin")}
+              aria-pressed={stampMethod === "staff_pin"}
+              className={`rounded-xl border p-3 text-left transition ${
+                stampMethod === "staff_pin" ? "border-red-500 bg-red-600/15" : "border-zinc-700 hover:border-zinc-500"
+              }`}
+            >
+              <p className="flex items-center gap-1.5 font-medium text-white">
+                <KeyRound className="h-4 w-4 text-red-400" /> Staff enter a code{" "}
+                <span className="rounded-full bg-green-600/20 px-2 py-0.5 text-[10px] font-semibold text-green-300">Recommended</span>
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                After scanning, your staff type a 4-digit code on the customer&apos;s phone and can give up to 3
+                stamps for big orders. Only real purchases earn stamps.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStampMethod("self_scan")}
+              aria-pressed={stampMethod === "self_scan"}
+              className={`rounded-xl border p-3 text-left transition ${
+                stampMethod === "self_scan" ? "border-red-500 bg-red-600/15" : "border-zinc-700 hover:border-zinc-500"
+              }`}
+            >
+              <p className="flex items-center gap-1.5 font-medium text-white">
+                <ScanLine className="h-4 w-4 text-red-400" /> Customers scan on their own
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                No staff needed. Anyone at your shop can collect one stamp every 12 hours, even without buying.
+              </p>
+            </button>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={welcomeBonus}
+            onChange={(e) => setWelcomeBonus(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Give new customers a <b>welcome bonus stamp</b> on their first visit
+            <span className="block text-xs text-zinc-500">
+              Cards that start with a stamp already filled are finished far more often.
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-2">
+          <Label className="text-zinc-300">The freebie is valid for</Label>
+          <div className="flex flex-wrap gap-2">
+            {([14, 30, 60, null] as const).map((d) => (
+              <Chip key={String(d)} selected={validDays === d} onClick={() => setValidDays(d)}>
+                {d == null ? "No expiry" : `${d} days`}
+              </Chip>
+            ))}
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label className="text-zinc-300">Card name</Label>
@@ -217,7 +284,16 @@ function CreateCard({
             }
             onClick={() =>
               start(async () => {
-                const r = await createStampCard({ businessId, title, stampsRequired: stamps, rewardTitle: freebie, endsAt: endsAt || null });
+                const r = await createStampCard({
+                  businessId,
+                  title,
+                  stampsRequired: stamps,
+                  rewardTitle: freebie,
+                  endsAt: endsAt || null,
+                  stampMethod,
+                  welcomeBonus: welcomeBonus ? 1 : 0,
+                  rewardValidDays: validDays,
+                });
                 if ("error" in r) {
                   toast.error(r.error);
                   return;
@@ -290,6 +366,12 @@ function CardItem({ card }: { card: StampCardRow }) {
             <span className="font-medium text-zinc-200">{card.reward_title}</span>
             {card.ends_at && ` · until ${new Date(card.ends_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`}
           </p>
+          <p className="text-sm text-zinc-500">
+            {card.stamp_method === "staff_pin" ? "Staff enter a code" : "Customers scan on their own"}
+            {card.welcome_bonus > 0 && " · welcome bonus stamp"}
+            {card.reward_valid_days ? ` · freebie valid ${card.reward_valid_days} days` : " · freebie never expires"}
+          </p>
+          {card.stamp_method === "staff_pin" && card.staff_pin && <StaffCode cardId={card.id} pin={card.staff_pin} />}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Collectors" value={card.stats.collectors} />
@@ -352,5 +434,38 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
     >
       {children}
     </button>
+  );
+}
+
+/** The 4-digit code staff type on a customer's phone, with a way to change it. */
+function StaffCode({ cardId, pin }: { cardId: string; pin: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
+      <KeyRound className="h-5 w-5 text-red-400" />
+      <div>
+        <p className="text-xs text-zinc-400">Staff stamp code — keep it behind the counter</p>
+        <p className="font-mono text-2xl font-bold tracking-[0.3em] text-white">{pin}</p>
+      </div>
+      <Button
+        variant="outline"
+        disabled={pending}
+        onClick={() => {
+          if (!confirm("Make a new stamp code? The old one stops working right away.")) return;
+          start(async () => {
+            const r = await rotateStampCardPin(cardId);
+            if ("error" in r) toast.error(r.error);
+            else {
+              toast.success(`New stamp code: ${r.pin}`);
+              router.refresh();
+            }
+          });
+        }}
+        className="ml-auto gap-1.5 border-zinc-700 text-zinc-300"
+      >
+        <RefreshCw className="h-4 w-4" /> New code
+      </Button>
+    </div>
   );
 }

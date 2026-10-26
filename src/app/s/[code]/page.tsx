@@ -21,7 +21,7 @@ export default async function StampLandingPage({ params }: { params: Promise<{ c
     ? (
         await createAdminClient()
           .from("stamp_cards")
-          .select("title, stamps_required, reward_title, status, ends_at, business:businesses ( name, logo_url )")
+          .select("title, stamps_required, reward_title, status, ends_at, stamp_method, welcome_bonus, business:businesses ( name, logo_url )")
           .eq("qr_code_value", code)
           .maybeSingle()
       ).data
@@ -49,6 +49,14 @@ export default async function StampLandingPage({ params }: { params: Promise<{ c
               Collect {card.stamps_required} stamps here and get{" "}
               <span className="font-semibold text-white">{card.reward_title}</span> free.
             </p>
+            {card.welcome_bonus > 0 && !ended && (
+              <p className="text-sm text-green-400">
+                Your first visit comes with {card.welcome_bonus} bonus stamp{card.welcome_bonus === 1 ? "" : "s"}.
+              </p>
+            )}
+            {card.stamp_method === "staff_pin" && !ended && (
+              <p className="text-sm text-zinc-400">After you scan, hand your phone to the staff so they can confirm your stamp.</p>
+            )}
             {ended && <p className="text-sm text-amber-400">This stamp card isn&apos;t running right now.</p>}
           </>
         ) : (

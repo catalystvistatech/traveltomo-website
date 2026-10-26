@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         .limit(2000),
       admin
         .from("stamp_card_rewards")
-        .select("id, card_id, claim_code, reward_title, earned_at, redeemed_at")
+        .select("id, card_id, claim_code, reward_title, earned_at, expires_at, redeemed_at")
         .eq("user_id", user.id)
         .order("earned_at", { ascending: false })
         .limit(200),
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     ? await admin
         .from("stamp_cards")
         .select(
-          "id, title, stamps_required, reward_title, reward_description, cooldown_hours, status, ends_at, business:businesses ( id, name, logo_url, address )"
+          "id, title, stamps_required, reward_title, reward_description, cooldown_hours, stamp_method, status, ends_at, business:businesses ( id, name, logo_url, address )"
         )
         .in("id", cardIds)
     : { data: [] as never[] };
@@ -72,6 +72,7 @@ export async function GET(request: Request) {
       stamps_required: card.stamps_required,
       reward_title: card.reward_title,
       reward_description: card.reward_description,
+      stamp_method: card.stamp_method,
       last_stamped_at: last,
       next_stamp_at: nextAt && new Date(nextAt).getTime() > now ? nextAt : null,
       ends_at: card.ends_at,
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
   const rewardList = (rewards ?? [])
     .map((r) => ({
       ...r,
+      expired: !r.redeemed_at && r.expires_at != null && new Date(r.expires_at).getTime() < now,
       card_title: titleById.get(r.card_id)?.title ?? null,
       business: titleById.get(r.card_id)?.business ?? null,
     }))
