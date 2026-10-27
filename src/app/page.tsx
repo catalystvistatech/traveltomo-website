@@ -1,13 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  MapPin,
   Dice5,
   Trophy,
-  Gift,
   Smartphone,
   Users,
-  ArrowRight,
   QrCode,
   Award,
   Navigation,
@@ -15,19 +13,140 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavLogo } from "@/components/landing/nav-logo";
+import {
+  APP_NAME,
+  APP_STORE_URL,
+  COMPANY_NAME,
+  CONTACT_EMAIL,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  DOWNLOAD_URL,
+  SITE_NAME,
+  SITE_URL,
+  jsonLd,
+} from "@/lib/seo";
 
 const RED = "#D12D34";
 const SALMON = "#FCA581";
 
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "en_PH",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: "/",
+  },
+};
+
+// Structured data for the home page: who publishes the site, the site itself,
+// and the iOS app with its real pricing (free download + Unlimited Pass).
+// No ratings or review counts: only add those once they come from a real
+// source. The App Store URL is included only when NEXT_PUBLIC_APP_STORE_URL
+// is set.
+const ORG_ID = `${SITE_URL}/#organization`;
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": ORG_ID,
+      name: COMPANY_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/icon-1024.png`,
+      email: CONTACT_EMAIL,
+      brand: { "@type": "Brand", name: SITE_NAME },
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "customer support",
+        email: CONTACT_EMAIL,
+        url: `${SITE_URL}/help`,
+      },
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: SITE_NAME,
+      alternateName: APP_NAME,
+      description: DEFAULT_DESCRIPTION,
+      inLanguage: "en-PH",
+      publisher: { "@id": ORG_ID },
+    },
+    {
+      "@type": "MobileApplication",
+      "@id": `${SITE_URL}/#app`,
+      name: APP_NAME,
+      alternateName: SITE_NAME,
+      description:
+        "A gamified travel companion for the Philippines. Roll the dice for your next stop, take quests and challenges at local businesses, collect digital stamp cards, and earn real rewards.",
+      url: SITE_URL,
+      image: `${SITE_URL}/icon-1024.png`,
+      operatingSystem: "iOS",
+      applicationCategory: "TravelApplication",
+      author: { "@id": ORG_ID },
+      publisher: { "@id": ORG_ID },
+      ...(APP_STORE_URL
+        ? { installUrl: APP_STORE_URL, downloadUrl: APP_STORE_URL, sameAs: [APP_STORE_URL] }
+        : {}),
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Free download",
+          price: "0",
+          priceCurrency: "USD",
+          category: "free",
+        },
+        {
+          "@type": "Offer",
+          name: "Unlimited Pass (monthly)",
+          description: "No ads and unlimited skips. Includes a 1-week free trial.",
+          price: "1.99",
+          priceCurrency: "USD",
+          category: "subscription",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "1.99",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
+          },
+        },
+        {
+          "@type": "Offer",
+          name: "Unlimited Pass (yearly)",
+          description: "No ads and unlimited skips. Includes a 1-week free trial.",
+          price: "4.99",
+          priceCurrency: "USD",
+          category: "subscription",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "4.99",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "ANN" },
+          },
+        },
+      ],
+    },
+  ],
+};
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(STRUCTURED_DATA) }}
+      />
       <Nav />
-      <Hero />
-      <HowItWorks />
-      <Features />
-      <ForMerchants />
-      <CTA />
+      <main>
+        <Hero />
+        <HowItWorks />
+        <Features />
+        <ForMerchants />
+        <CTA />
+      </main>
       <Footer />
     </div>
   );
@@ -37,7 +156,7 @@ export default function LandingPage() {
 
 function Nav() {
   return (
-    <nav className="fixed top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
+    <nav aria-label="Main" className="fixed top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <NavLogo />
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
@@ -54,7 +173,7 @@ function Nav() {
             Dashboard
           </Link>
         </div>
-        <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+        <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
           <Button
             className="text-sm rounded-full px-5 text-white"
             style={{ backgroundColor: RED }}
@@ -105,7 +224,7 @@ function Hero() {
             </p>
 
             <div className="flex items-center gap-4">
-              <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+              <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
                 <Button
                   size="lg"
                   className="text-sm font-semibold rounded-full px-6 h-11 text-white"
@@ -123,7 +242,7 @@ function Hero() {
           <div className="relative flex justify-center md:justify-end">
             <Image
               src="/hero-phone.png"
-              alt="TravelTomo app on iPhone"
+              alt="TravelTomo app on an iPhone showing the tagline Explore. Play. Earn. Repeat."
               width={400}
               height={418}
               className="relative z-10 max-w-[320px] md:max-w-[400px] h-auto drop-shadow-2xl"
@@ -185,7 +304,7 @@ function HowItWorks() {
               <div className="flex justify-center mb-5">
                 <Image
                   src={step.icon}
-                  alt={step.title}
+                  alt=""
                   width={80}
                   height={80}
                   className="h-20 w-20 object-contain"
@@ -227,8 +346,8 @@ function Features() {
     },
     {
       icon: <QrCode className="h-5 w-5" />,
-      title: "QR Rewards",
-      desc: "Scan QR codes at businesses for real discounts.",
+      title: "Stamp Cards & QR Rewards",
+      desc: "Scan a shop's QR to collect stamps and earn freebies and discounts.",
     },
     {
       icon: <Award className="h-5 w-5" />,
@@ -393,7 +512,7 @@ function CTA() {
           Currently available in Angeles City, Pampanga.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a href="https://testflight.apple.com/join/TzqkgSue" target="_blank" rel="noopener noreferrer">
+          <a href={DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
             <Button
               size="lg"
               className="text-sm font-semibold rounded-full px-8 h-12 text-white"
@@ -435,7 +554,7 @@ function Footer() {
           </Link>
 
           {/* Links */}
-          <div className="flex items-center gap-6 text-sm text-zinc-500">
+          <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-6 text-sm text-zinc-500">
             <Link href="/privacy" className="hover:text-white transition-colors">
               Privacy
             </Link>
@@ -446,24 +565,21 @@ function Footer() {
               Help
             </Link>
             <a
-              href="mailto:info@traveltomo.app"
+              href={`mailto:${CONTACT_EMAIL}`}
               className="hover:text-white transition-colors"
             >
               Contact
             </a>
-            <Link href="/help" className="hover:text-white transition-colors">
-              Help
-            </Link>
             <Link
               href="/admin/login"
               className="hover:text-white transition-colors"
             >
               Dashboard
             </Link>
-          </div>
+          </nav>
 
           <p className="text-xs text-zinc-600">
-            2026 Catalyst Vista Tech. All rights reserved.
+            &copy; 2026 {COMPANY_NAME}. All rights reserved.
           </p>
         </div>
       </div>

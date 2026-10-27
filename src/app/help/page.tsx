@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { jsonLd, pageMetadata, SITE_URL } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Help & Support",
   description:
-    "Answers to common questions about playing TravelTomo, claiming rewards, the Unlimited Pass, and getting in touch.",
-};
+    "Answers to common questions about TravelTomo: how to play, claiming rewards, stamp cards, skips, the Unlimited Pass, deleting your account, and getting started as a business.",
+  path: "/help",
+});
 
 const FAQS: { q: string; a: string }[] = [
   {
@@ -46,9 +48,25 @@ const FAQS: { q: string; a: string }[] = [
   },
 ];
 
+const FAQ_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": `${SITE_URL}/help#faq`,
+  url: `${SITE_URL}/help`,
+  mainEntity: FAQS.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+};
+
 export default function HelpPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(FAQ_JSON_LD) }}
+      />
       <div className="mx-auto max-w-3xl px-6 py-16">
         <Link
           href="/"

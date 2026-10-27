@@ -1,7 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  APP_STORE_ID,
+  COMPANY_NAME,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  SITE_NAME,
+  SITE_URL,
+} from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,46 +22,53 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.traveltomo.app";
-const DESCRIPTION =
-  "TravelTomo turns travel in the Philippines into a game: roll the dice, visit local spots, complete quests and collect stamps to win free food, drinks and discounts from local businesses.";
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "TravelTomo — Travel Quests & Rewards in the Philippines",
+    default: DEFAULT_TITLE,
     template: "%s — TravelTomo",
   },
-  description: DESCRIPTION,
-  applicationName: "TravelTomo",
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: COMPANY_NAME, url: SITE_URL }],
+  creator: COMPANY_NAME,
+  publisher: COMPANY_NAME,
+  category: "travel",
   keywords: [
     "TravelTomo",
+    "Travel Tomo PH",
     "Philippines travel app",
+    "gamified travel app",
     "travel quests",
+    "travel challenges",
+    "digital stamp card",
+    "loyalty rewards Philippines",
     "food trip",
-    "stamp card",
-    "loyalty rewards",
     "things to do in Angeles City",
     "Pampanga travel",
-    "local deals",
-    "travel game",
+    "local deals Philippines",
   ],
+  // Canonical URLs are set per page; a canonical here would be inherited by
+  // every route and point them all at the home page.
   openGraph: {
     type: "website",
-    siteName: "TravelTomo",
-    title: "TravelTomo — Travel Quests & Rewards in the Philippines",
-    description: DESCRIPTION,
-    url: SITE_URL,
-    images: [{ url: "/icon-1024.png", width: 1024, height: 1024, alt: "TravelTomo" }],
+    siteName: SITE_NAME,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
     locale: "en_PH",
   },
   twitter: {
-    card: "summary",
-    title: "TravelTomo — Travel Quests & Rewards in the Philippines",
-    description: DESCRIPTION,
-    images: ["/icon-1024.png"],
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
   },
-  alternates: { canonical: "/" },
+  formatDetection: { telephone: false, address: false, email: false },
+  ...(APP_STORE_ID ? { itunes: { appId: APP_STORE_ID } } : {}),
+};
+
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -63,7 +78,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="en-PH"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">

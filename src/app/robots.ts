@@ -1,12 +1,13 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.traveltomo.app";
-
-// Public marketing + legal pages are indexable; the dashboard, API and
-// per-QR stamp pages are not.
+// Public marketing, help and legal pages are crawlable. The dashboard and the
+// app's JSON API are blocked. Per-merchant stamp QR pages (/s/<code>) stay
+// crawlable on purpose: they carry a `noindex` robots meta tag, which crawlers
+// can only see if they are allowed to fetch the page.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/v1", "/s/"] }],
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/v1"] }],
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
