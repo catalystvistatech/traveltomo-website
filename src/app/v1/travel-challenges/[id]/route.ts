@@ -9,6 +9,7 @@ import {
   loadStopCompletionsForTravelChallenge,
 } from "@/lib/challenge-progress";
 import { withFreshPhotos } from "@/lib/google/photo-url";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -230,12 +231,26 @@ export async function GET(request: Request, { params }: Params) {
     }
   }
 
+  // Same fallback as the Quests list: a quest without its own cover shows
+  // the business's place photo instead of the plain blue backdrop.
+  let coverUrl = row.cover_url;
+  if (!coverUrl && row.business?.id) {
+    const { data: photo } = await createAdminClient()
+      .from("places")
+      .select("image_url")
+      .eq("business_id", row.business.id)
+      .not("image_url", "is", null)
+      .limit(1)
+      .maybeSingle();
+    coverUrl = (photo?.image_url as string | null) ?? null;
+  }
+
   return NextResponse.json(withFreshPhotos({
     data: {
       id: row.id,
       title: row.title,
       description: row.description,
-      cover_url: row.cover_url,
+      cover_url: coverUrl,
       completion_mode: row.completion_mode,
       status: row.status,
       reward_title: row.big_reward_title,
