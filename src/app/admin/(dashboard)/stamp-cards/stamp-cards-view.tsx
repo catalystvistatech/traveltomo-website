@@ -139,7 +139,7 @@ function CreateCard({
         )}
 
         <div className="space-y-2">
-          <Label className="text-zinc-300">How many visits to fill the card?</Label>
+          <Label className="text-zinc-300">How many stamps to fill the card?</Label>
           <div className="flex flex-wrap gap-2">
             {STAMP_OPTIONS.map((n) => (
               <Chip
@@ -362,7 +362,7 @@ function CardItem({ card }: { card: StampCardRow }) {
             </span>
           </div>
           <p className="text-zinc-400">
-            {card.business_name} · {card.stamps_required} visits →{" "}
+            {card.business_name} · {card.stamps_required} stamps →{" "}
             <span className="font-medium text-zinc-200">{card.reward_title}</span>
             {card.ends_at && ` · until ${new Date(card.ends_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`}
           </p>
