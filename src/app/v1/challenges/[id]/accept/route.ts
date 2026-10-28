@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { guardQuestPlayable } from "@/lib/quest-dates";
 import { ensureTravelChallengeProgress } from "@/lib/challenge-progress";
 
@@ -24,9 +25,19 @@ export async function POST(request: Request, { params }: Params) {
   // lookup; we always need it anyway for the insert payload.
   const { data: challengeRow } = await client
     .from("challenges")
-    .select("id, travel_challenge_id")
+    .select("id, travel_challenge_id, merchant_id")
     .eq("id", id)
     .maybeSingle();
+
+  // A merchant can't play their own stops (conflict of interest, see 037).
+  // The completions INSERT policy used to enforce this; the insert below now
+  // runs on the server's client, so the route has to.
+  if (challengeRow?.merchant_id === user.id) {
+    return NextResponse.json(
+      { error: "own_challenge", detail: "You can't play your own business's challenge." },
+      { status: 403 }
+    );
+  }
 
   let travelProgressId: string | null = null;
   if (challengeRow?.travel_challenge_id) {
@@ -85,7 +96,9 @@ export async function POST(request: Request, { params }: Params) {
   // into a single row. ON CONFLICT DO NOTHING + a follow-up SELECT
   // covers the case where another in-flight request already created
   // the row (we'd lose the RETURNING value otherwise).
-  const { data: inserted, error: insertError } = await client
+  // Travelers can't write completions themselves (065); the row always
+  // starts as an unverified, ongoing stop for the caller.
+  const { data: inserted, error: insertError } = await createAdminClient()
     .from("challenge_completions")
     .insert({
       user_id: user.id,

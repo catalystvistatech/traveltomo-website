@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { loadActiveTravelProgress } from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
@@ -26,9 +27,11 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const now = new Date().toISOString();
+  // Travelers can't write progress or completions themselves (065).
+  const admin = createAdminClient();
 
   // Forfeit the in-flight stop first so its partial-unique slot frees up.
-  const { error: stopError } = await client
+  const { error: stopError } = await admin
     .from("challenge_completions")
     .update({ player_status: "forfeited", completed_at: now })
     .eq("user_id", user.id)
@@ -38,11 +41,12 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: stopError.message }, { status: 500 });
   }
 
-  const { error: updateError } = await client
+  const { error: updateError } = await admin
     .from("travel_challenge_progress")
     .update({ status: "abandoned", updated_at: now })
     .eq("id", progress.id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("status", "active");
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }

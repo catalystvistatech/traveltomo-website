@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeGlobalSkip } from "@/lib/challenge-progress";
 
 type Params = { params: Promise<{ id: string }> };
@@ -63,7 +64,9 @@ export async function POST(request: Request, { params }: Params) {
   // this the next /accept call would refuse to start the same challenge
   // again later (rare but possible if the user re-rolls onto the same
   // pin after several other stops).
-  const { error: updateError } = await client
+  // Travelers can't write completions themselves (065); the row was found
+  // above under the caller's own session, so it is theirs.
+  const { error: updateError } = await createAdminClient()
     .from("challenge_completions")
     .update({
       player_status: "skipped",
