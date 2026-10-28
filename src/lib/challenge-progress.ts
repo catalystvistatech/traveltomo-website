@@ -106,7 +106,11 @@ export async function loadActiveTravelProgress(
   return data;
 }
 
-/** Creates or returns the user's active session for a travel-challenge set. */
+/**
+ * Creates or returns the user's active session for a travel-challenge set.
+ * Travelers can't write progress rows themselves (065), so the insert runs
+ * on the server's client; callers pass the already-authenticated user's id.
+ */
 export async function ensureTravelChallengeProgress(
   client: SupabaseClient,
   userId: string,
@@ -119,7 +123,7 @@ export async function ensureTravelChallengeProgress(
   );
   if (existing) return existing;
 
-  const { data, error } = await client
+  const { data, error } = await createAdminClient()
     .from("travel_challenge_progress")
     .insert({
       user_id: userId,

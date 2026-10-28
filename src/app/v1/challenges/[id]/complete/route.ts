@@ -26,7 +26,7 @@ type Params = { params: Promise<{ id: string }> };
  */
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
@@ -53,7 +53,10 @@ export async function POST(request: Request, { params }: Params) {
 
   const code = generateCode();
 
-  let q = client
+  // Travelers can't write completions themselves (065): this route decides
+  // what a submission may change, then writes on the server's client. The
+  // user_id filter below is what scopes it to the caller.
+  let q = createAdminClient()
     .from("challenge_completions")
     .update({
       verification_status: "pending",
@@ -84,7 +87,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   if (!data || data.length === 0) {
-    // RLS rejection, missing accept row, or the user re-rolled onto a
+    // Missing accept row, or the user re-rolled onto a
     // different challenge before submitting. Either way the client
     // can't be told "success" - they wouldn't see the reward in
     // My Rewards and would assume the submission was lost.
