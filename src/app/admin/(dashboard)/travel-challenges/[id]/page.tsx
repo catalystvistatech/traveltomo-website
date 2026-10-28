@@ -48,7 +48,7 @@ import {
 } from "@/lib/validations/marketplace";
 import { ArrowLeft, Plus, Trash2, FileStack, Send, Search, MapPin, Loader2, Pencil, X, ImagePlus } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
-import { manilaToday, questState } from "@/lib/quest-window";
+import { manilaToday, QUEST_END_RULE_MESSAGE, questState } from "@/lib/quest-window";
 import { QuestAppPreview } from "@/components/quest-app-card";
 import type { PlacePrediction } from "@/components/business-location-picker";
 import { APIProvider, Map, Marker, useMap } from "@vis.gl/react-google-maps";
@@ -534,6 +534,9 @@ export default function TravelChallengeDetailPage({
             {rec.date_range_start || rec.date_range_end
               ? ` · Runs ${(rec.date_range_start as string | null) ?? "now"} – ${(rec.date_range_end as string | null) ?? "no end date"}`
               : ""}
+            {rec.max_total_completions != null
+              ? ` · ${(rec.current_total_completions as number | null) ?? 0} of ${rec.max_total_completions as number} winners`
+              : ""}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -594,7 +597,7 @@ export default function TravelChallengeDetailPage({
         status,
         date_range_start: (rec.date_range_start as string | null) ?? null,
         date_range_end: (rec.date_range_end as string | null) ?? null,
-      }) === "ended" && <RenewQuestBanner id={id} endedOn={(rec.date_range_end as string | null) ?? null} onRenewed={reload} />}
+      }) === "ended" && <RenewQuestBanner id={id} endedOn={(rec.date_range_end as string | null) ?? null} winnersFilled={filledWinnerCap(rec)} onRenewed={reload} />}
 
       {/* Business assignment banner — shown when merchant has multiple businesses */}
       {businesses.length > 1 && (() => {
@@ -729,8 +732,12 @@ export default function TravelChallengeDetailPage({
                   <Input type="date" value={editForm.date_range_end} onChange={(e) => setEditForm({ ...editForm, date_range_end: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Winner cap</Label>
+                <Input type="number" min={1} inputMode="numeric" placeholder="No cap" value={editForm.max_total_completions} onChange={(e) => setEditForm({ ...editForm, max_total_completions: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white sm:w-1/2" />
+              </div>
               <p className="text-xs text-zinc-500">
-                When the quest is playable. Leave both blank to keep it always on.
+                When the quest is playable. It ends on the end date or once the winner cap is reached, whichever comes first. {QUEST_END_RULE_MESSAGE}
               </p>
             </div>
 
@@ -1349,13 +1356,23 @@ export default function TravelChallengeDetailPage({
  * Shown on a quest that has ended: travelers can no longer see or play it.
  * One tap runs it again until the chosen day (default: 30 days from today).
  */
+/** The winner cap, if every winner spot is taken; otherwise null. */
+function filledWinnerCap(rec: Record<string, unknown>): number | null {
+  const cap = rec.max_total_completions as number | null;
+  const winners = (rec.current_total_completions as number | null) ?? 0;
+  return cap != null && winners >= cap ? cap : null;
+}
+
 function RenewQuestBanner({
   id,
   endedOn,
+  winnersFilled,
   onRenewed,
 }: {
   id: string;
   endedOn: string | null;
+  /** The winner cap, when the quest ended because it filled. */
+  winnersFilled: number | null;
   onRenewed: () => Promise<void> | void;
 }) {
   const [endDate, setEndDate] = useState(() => {
@@ -1367,7 +1384,11 @@ function RenewQuestBanner({
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-700/60 bg-amber-900/20 px-4 py-3">
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-amber-200">This quest has ended{endedOn ? ` (last day: ${endedOn})` : ""}.</p>
+        <p className="font-medium text-amber-200">
+          {winnersFilled != null
+            ? `This quest has ended: all ${winnersFilled} winners have finished.`
+            : `This quest has ended${endedOn ? ` (last day: ${endedOn})` : ""}.`}
+        </p>
         <p className="text-sm text-amber-200/70">Travelers can no longer see or play it. Run it again to bring it back.</p>
       </div>
       <Input

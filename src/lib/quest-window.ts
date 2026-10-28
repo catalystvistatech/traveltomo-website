@@ -33,3 +33,17 @@ export function questState(q: QuestWindow, today: string = manilaToday()): Quest
 export function isQuestPlayable(q: QuestWindow, today?: string) {
   return questState(q, today) === "playable";
 }
+
+/**
+ * Every quest needs a way to end, so a business is never stuck honoring a
+ * promo forever: a last day, a winner cap, or both. Mirrored by the
+ * travel_challenges_must_end constraint (supabase/064).
+ */
+export const QUEST_END_RULE_MESSAGE = "Set an end date, a winner cap, or both, so the quest can end.";
+
+export function questHasEnd(q: {
+  date_range_end?: string | null;
+  max_total_completions?: number | null;
+}) {
+  return Boolean(q.date_range_end) || (q.max_total_completions ?? 0) > 0;
+}
