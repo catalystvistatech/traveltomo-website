@@ -25,6 +25,7 @@ import {
   HelpCircle,
   UserCog,
   Stamp,
+  Globe,
 } from "lucide-react";
 import {
   Sidebar,
@@ -100,6 +101,7 @@ export function AppSidebar({ user }: { user: UserProfile }) {
       // moderation one, so it is not offered to plain admins.
       ...(user.role === "superadmin"
         ? [
+            { title: "Platform Overview", href: "/admin/manage/overview", icon: Globe },
             {
               title: "Act as Merchant",
               href: "/admin/manage/act-as",
