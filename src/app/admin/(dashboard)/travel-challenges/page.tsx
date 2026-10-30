@@ -39,6 +39,7 @@ import { Plus, ImagePlus, X, RotateCcw } from "lucide-react";
 import { PageSkeleton } from "@/components/dashboard/page-skeleton";
 import { QuestCard } from "./quest-card";
 import { TRAVEL_CHALLENGE_STOP_COUNT } from "@/lib/validations/marketplace";
+import { QUEST_END_RULE_MESSAGE } from "@/lib/quest-window";
 
 type Row = Awaited<ReturnType<typeof listTravelChallenges>>[number];
 
@@ -64,11 +65,14 @@ function isoDate(d: Date): string {
  * (mm/dd/yyyy on US-English machines), which is easy to misread in the
  * Philippines, so the chosen range is echoed back unambiguously.
  */
-function describeRange(start: string, end: string): string {
+function describeRange(start: string, end: string, cap: string): string {
   const fmt = (v: string) =>
     new Date(`${v}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-  if (!start && !end) return "No dates set — the quest keeps running until you delete it.";
-  if (start && !end) return `Starts ${fmt(start)}, no end date.`;
+  if (!end) {
+    if (!cap) return QUEST_END_RULE_MESSAGE;
+    const capped = `ends when ${cap} traveler${cap === "1" ? " finishes" : "s finish"}`;
+    return start ? `Starts ${fmt(start)}, ${capped}.` : `Runs now, ${capped}.`;
+  }
   if (!start && end) return `Ends ${fmt(end)}.`;
   const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
   if (days < 0) return "The end date is before the start date.";
@@ -409,8 +413,24 @@ export default function TravelChallengesPage() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-300">Winner cap</Label>
+              <Input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                placeholder="No cap"
+                value={form.max_total_completions}
+                onChange={(e) =>
+                  setForm({ ...form, max_total_completions: e.target.value })
+                }
+                className="bg-zinc-800 border-zinc-700 text-white sm:w-1/2"
+              />
+            </div>
             <p className="text-xs text-zinc-500 -mt-2">
-              {describeRange(form.date_range_start, form.date_range_end)}
+              {describeRange(form.date_range_start, form.date_range_end, form.max_total_completions)}
+              {form.date_range_end && form.max_total_completions &&
+                ` Or sooner, once ${form.max_total_completions} traveler${form.max_total_completions === "1" ? " finishes" : "s finish"}.`}
             </p>
             {/* Every quest requires all stops, so the big reward always applies. */}
             {(

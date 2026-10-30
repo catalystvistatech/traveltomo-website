@@ -15,6 +15,8 @@ export {
   manilaToday,
   questState,
   isQuestPlayable,
+  QUEST_END_RULE_MESSAGE,
+  questHasEnd,
   type QuestWindow,
   type QuestState,
 } from "@/lib/quest-window";
