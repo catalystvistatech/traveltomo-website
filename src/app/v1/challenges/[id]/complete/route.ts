@@ -1,20 +1,32 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
-import {
-  syncTravelChallengeProgressCompletion,
-} from "@/lib/challenge-progress";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { guardQuestPlayable } from "@/lib/quest-dates";
+// syncTravelChallengeProgressCompletion is invoked by /v1/redemptions/verify
+// when the merchant approves the code, not at this stage.
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
  * POST /v1/challenges/:id/complete
- * Body: { completion_id, gps_latitude?, gps_longitude?, proof_url? }
- * Marks the completion as pending merchant verification and generates the
- * short verification code the user will show at the business.
+ * Body: { completion_id?, gps_latitude?, gps_longitude?, proof_url? }
+ *
+ * Marks the user's active (in-flight) completion as `submitted`,
+ * stamps `completed_at`, attaches the proof, and generates the 6-char
+ * verification code the user shows the merchant.
+ *
+ * Two invariants this route must guarantee:
+ *   1. The UPDATE must target ONLY the active row (completed_at IS NULL)
+ *      so a re-roll onto a previously-skipped challenge doesn't
+ *      overwrite the skipped row's already-set completed_at.
+ *   2. The route must surface an error if zero rows were updated. Prior
+ *      to migration 027 the user-side UPDATE was silently rejected by
+ *      RLS and this endpoint happily returned a verification code with
+ *      nothing written to the DB - "Nothing pending" forever.
  */
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
-  const { user, client, error } = await requireUser(request);
+  const { user, error } = await requireUser(request);
   if (error || !user)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
@@ -25,9 +37,26 @@ export async function POST(request: Request, { params }: Params) {
     proof_url?: string;
   };
 
+  // A stop inside a quest can only be submitted while the quest is still
+  // running. Without this, a stop the expiry job had already marked
+  // `expired` (its completed_at is still null) could be revived here and
+  // carried all the way to the quest's big reward.
+  const { data: stop } = await createAdminClient()
+    .from("challenges")
+    .select("travel_challenge_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (stop?.travel_challenge_id) {
+    const notPlayable = await guardQuestPlayable(stop.travel_challenge_id as string);
+    if (notPlayable) return notPlayable;
+  }
+
   const code = generateCode();
 
-  const q = client
+  // Travelers can't write completions themselves (065): this route decides
+  // what a submission may change, then writes on the server's client. The
+  // user_id filter below is what scopes it to the caller.
+  let q = createAdminClient()
     .from("challenge_completions")
     .update({
       verification_status: "pending",
@@ -39,15 +68,42 @@ export async function POST(request: Request, { params }: Params) {
       proof_url: body.proof_url ?? null,
     })
     .eq("user_id", user.id)
-    .eq("challenge_id", id);
+    .eq("challenge_id", id)
+    // Lock to the active row so abandoned (`skipped` + completed_at set)
+    // rows can't be silently revived as if the user had just submitted.
+    .is("completed_at", null)
+    // Only an in-progress stop can be submitted — never one the expiry
+    // job (or a skip) already closed out.
+    .eq("player_status", "ongoing");
 
-  const filtered = body.completion_id ? q.eq("id", body.completion_id) : q;
-  const { data, error: updateError } = await filtered.select("id").maybeSingle();
+  if (body.completion_id) {
+    q = q.eq("id", body.completion_id);
+  }
 
-  if (updateError)
+  const { data, error: updateError } = await q.select("id");
+
+  if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
+  }
 
-  return NextResponse.json({ data: { ...data, verification_code: code } });
+  if (!data || data.length === 0) {
+    // Missing accept row, or the user re-rolled onto a
+    // different challenge before submitting. Either way the client
+    // can't be told "success" - they wouldn't see the reward in
+    // My Rewards and would assume the submission was lost.
+    return NextResponse.json(
+      {
+        error: "no_active_completion",
+        detail:
+          "No active completion found for this challenge. Tap Start Challenge to roll again.",
+      },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json({
+    data: { id: data[0].id, verification_code: code },
+  });
 }
 
 function generateCode(): string {

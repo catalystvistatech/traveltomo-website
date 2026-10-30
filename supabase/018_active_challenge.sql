@@ -4,7 +4,7 @@
 -- lifecycle. Prior to this migration `completed_at` was NOT NULL with
 -- a default of `now()`, which meant the `/v1/challenges/:id/accept`
 -- endpoint (which inserts with `completed_at: null`) silently failed
--- under RLS — accepting a challenge never actually wrote a row.
+-- under RLS â€” accepting a challenge never actually wrote a row.
 --
 -- After this migration:
 --   - `accepted_at` records when the user accepted the challenge.

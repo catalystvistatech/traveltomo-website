@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emitNotification } from "@/lib/notifications/emit";
 import { revalidatePath } from "next/cache";
+import { cache } from "react";
 
 export type UserRole = "user" | "merchant" | "admin" | "superadmin";
 type MerchantRequestStatus =
@@ -26,7 +27,22 @@ function isAdminRole(role: UserRole) {
   return role === "admin" || role === "superadmin";
 }
 
+/**
+ * The caller's profile, looked up at most once per request.
+ *
+ * Nearly every server action (and the dashboard layout) calls this, and each
+ * call used to repeat two network round trips — `auth.getUser()` plus the
+ * `profiles` read. React `cache()` memoizes per request only, so nothing
+ * leaks between users or requests.
+ *
+ * The export stays a plain async function because a "use server" module may
+ * only export async functions; the memoized body is kept private.
+ */
 export async function getCurrentUser(): Promise<UserProfile | null> {
+  return getCurrentUserOncePerRequest();
+}
+
+const getCurrentUserOncePerRequest = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,7 +62,7 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
     ...profile,
     email: user.email ?? "",
   } as UserProfile;
-}
+});
 
 export async function signOut() {
   const supabase = await createClient();

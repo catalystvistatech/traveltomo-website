@@ -15,14 +15,16 @@
  * API reference: https://developers.google.com/maps/documentation/places/web-service/nearby-search
  */
 
+import { placePhotoUrl } from "@/lib/google/photo-url";
+
 const GOOGLE_NEARBY_URL =
   "https://places.googleapis.com/v1/places:searchNearby";
 
 const GOOGLE_SEARCH_TEXT_URL =
   "https://places.googleapis.com/v1/places:searchText";
 
-const GOOGLE_PHOTO_MEDIA = (name: string) =>
-  `https://places.googleapis.com/v1/${name}/media`;
+const GOOGLE_PLACE_DETAILS_URL = (placeId: string) =>
+  `https://places.googleapis.com/v1/places/${placeId}`;
 
 /** Types the mobile client filters by, mapped to Places API (New) types. */
 export type EstablishmentType =
@@ -33,7 +35,8 @@ export type EstablishmentType =
   | "adventure"
   | "landmark"
   | "shopping"
-  | "entertainment";
+  | "entertainment"
+  | "animal_themed";
 
 const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   restaurant: "restaurant",
@@ -44,6 +47,7 @@ const GOOGLE_TYPE_FOR_ESTABLISHMENT: Record<EstablishmentType, string> = {
   landmark: "tourist_attraction",
   shopping: "shopping_mall",
   entertainment: "amusement_park",
+  animal_themed: "zoo",
 };
 
 /** Normalized place shape returned to the mobile app. Mirrors the
@@ -122,18 +126,17 @@ function apiKey(): string {
   return key;
 }
 
+/**
+ * Our stable photo link for a place (see /v1/places/photo). Google's own
+ * photo links expire and embed the API key, so they are never stored.
+ */
 function photoURL(
+  placeId: string,
   photoName: string | undefined,
   maxWidth = 480,
 ): string | null {
   if (!photoName) return null;
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) return null;
-  const qs = new URLSearchParams({
-    maxWidthPx: String(maxWidth),
-    key,
-  });
-  return `${GOOGLE_PHOTO_MEDIA(photoName)}?${qs.toString()}`;
+  return placePhotoUrl(placeId, maxWidth);
 }
 
 function cityFromComponents(
@@ -190,13 +193,48 @@ function normalize(result: GooglePlaceNew): NormalizedPlace | null {
     latitude: lat,
     longitude: lng,
     category: categoryFromTypes(result.primaryType, result.types),
-    image_url: photoURL(result.photos?.[0]?.name),
+    image_url: photoURL(result.id, result.photos?.[0]?.name),
     city: cityFromComponents(result.addressComponents),
     rating: typeof result.rating === "number" ? result.rating : null,
     user_ratings_total:
       typeof result.userRatingCount === "number" ? result.userRatingCount : null,
     google_place_id: result.id,
   };
+}
+
+/**
+ * Fetches photo + rating enrichment for a single place by Google place id.
+ * Used to hydrate business-mirrored `places` rows (created from a merchant's
+ * own record, so they have no Google photo) with the imagery from the
+ * venue's Google Business listing. Narrow field mask keeps the call cheap;
+ * returns null when the place has no photos or the lookup fails.
+ */
+export async function googlePlaceEnrichment(placeId: string): Promise<{
+  image_url: string | null;
+  rating: number | null;
+  user_ratings_total: number | null;
+} | null> {
+  try {
+    const response = await fetch(GOOGLE_PLACE_DETAILS_URL(placeId), {
+      headers: {
+        "X-Goog-Api-Key": apiKey(),
+        "X-Goog-FieldMask": "photos,rating,userRatingCount",
+      },
+      // Photos on a listing change rarely; a day of caching matches the
+      // places table TTL.
+      next: { revalidate: 86_400 },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as GooglePlaceNew;
+    return {
+      image_url: photoURL(placeId, data.photos?.[0]?.name),
+      rating: typeof data.rating === "number" ? data.rating : null,
+      user_ratings_total:
+        typeof data.userRatingCount === "number" ? data.userRatingCount : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

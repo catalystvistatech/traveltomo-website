@@ -3,7 +3,7 @@
 --
 -- catalystvistatech@gmail.com is permanently superadmin.
 -- A BEFORE UPDATE trigger blocks any attempt to change its
--- role — regardless of who runs the UPDATE (service_role
+-- role â€” regardless of who runs the UPDATE (service_role
 -- included, because the trigger runs SECURITY DEFINER-level
 -- checks via auth.users, not the caller's role).
 -- ============================================================
@@ -20,7 +20,7 @@ BEGIN
   LIMIT 1;
 
   IF _uid IS NULL THEN
-    RAISE NOTICE 'catalystvistatech@gmail.com not found — will be set to superadmin on first sign-up via trigger below.';
+    RAISE NOTICE 'catalystvistatech@gmail.com not found â€” will be set to superadmin on first sign-up via trigger below.';
     RETURN;
   END IF;
 

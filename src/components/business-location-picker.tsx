@@ -34,6 +34,9 @@ export interface BusinessLocationValue {
 interface Props {
   value: BusinessLocationValue;
   onChange: (patch: Partial<BusinessLocationValue>) => void;
+  /** Called with the full Google result when the merchant picks one (e.g.
+   *  to pre-fill the business type from its category). */
+  onPick?: (prediction: PlacePrediction) => void;
   biasLat?: number | null;
   biasLng?: number | null;
 }
@@ -48,6 +51,7 @@ interface Props {
 export function BusinessLocationPicker({
   value,
   onChange,
+  onPick,
   biasLat,
   biasLng,
 }: Props) {
@@ -133,12 +137,13 @@ export function BusinessLocationPicker({
         patch.name = prediction.name;
       }
       onChange(patch);
+      onPick?.(prediction);
       setQuery("");
       setShowResults(false);
       setPredictions([]);
       setManualOverride(false);
     },
-    [onChange, value.city, value.name]
+    [onChange, onPick, value.city, value.name]
   );
 
   // Show map once a location has been selected (via autocomplete or manual entry).

@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { guardQuestPlayable } from "@/lib/quest-dates";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /v1/me/active-challenge
  *
- * Returns the caller's most recent in-progress challenge  a
+ * Returns the caller's most recent in-progress challenge ï¿½ a
  * `challenge_completions` row that has been accepted (status `pending`)
  * but not yet verified (`completed_at IS NULL`). The response includes
  * enough info for the iOS app to render a "Continue Challenge" banner
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  // `challenges` has no direct FK to `businesses`  only `merchant_id ->
+  // `challenges` has no direct FK to `businesses` ï¿½ only `merchant_id ->
   // profiles.id`. We embed every relation PostgREST CAN discover, then
   // resolve the merchant's business in a second query below.
   const { data, error: queryError } = await client
@@ -45,20 +47,25 @@ export async function GET(request: Request) {
     .eq("user_id", user.id)
     .eq("verification_status", "pending")
     .is("completed_at", null)
+    // Expired stops keep completed_at null; don't offer them as "Continue".
+    .eq("player_status", "ongoing")
     .order("accepted_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
 
+  // Private cache for both the empty and populated responses so the
+  // iOS URLCache short-circuits Home's per-appear refresh storms.
+  const cacheHeaders = { "Cache-Control": "private, max-age=15" };
+
   if (queryError) {
-    // PGRST116 = no rows; treat as "no active challenge" rather than 500.
     if (queryError.code === "PGRST116") {
-      return NextResponse.json({ data: null });
+      return NextResponse.json({ data: null }, { headers: cacheHeaders });
     }
     return NextResponse.json({ error: queryError.message }, { status: 500 });
   }
 
   if (!data) {
-    return NextResponse.json({ data: null });
+    return NextResponse.json({ data: null }, { headers: cacheHeaders });
   }
 
   type Row = {
@@ -97,7 +104,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: null });
   }
 
-  // Resolve the merchant's business — used as the final coordinate
+  // A stop whose quest has ended isn't something to "continue".
+  if (challenge.travel_challenge_id) {
+    const notPlayable = await guardQuestPlayable(challenge.travel_challenge_id);
+    if (notPlayable) return NextResponse.json({ data: null }, { headers: cacheHeaders });
+  }
+
+  // Resolve the merchant's business ï¿½ used as the final coordinate
   // fallback when the challenge doesn't carry its own pin and the
   // linked place is null. Public read on `businesses` is allowed by
   // migration 014 (traveler_read_businesses).
@@ -114,6 +127,10 @@ export async function GET(request: Request) {
       .from("businesses")
       .select("id, name, latitude, longitude, establishment_type")
       .eq("merchant_id", challenge.merchant_id)
+      // A merchant can own several businesses; maybeSingle() alone errors
+      // (and silently yields null) when there's more than one.
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
     business = (businessRow as BusinessRow | null) ?? null;
   }
@@ -144,9 +161,9 @@ export async function GET(request: Request) {
         ? {
             id: challenge.travel_challenge.id,
             title: challenge.travel_challenge.title,
-            cover_url: challenge.travel_challenge.cover_url,
+            cover_url: withFreshPhotos(challenge.travel_challenge.cover_url),
           }
         : null,
     },
-  });
+  }, { headers: cacheHeaders });
 }

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createApiClient, requireUser } from "@/lib/supabase/api";
+import { effectiveServiceRadius } from "@/lib/constants/service-radius";
 import {
   derivePlayerStopStatus,
   isChallengeExcludedFromNearbyPool,
@@ -21,6 +24,12 @@ export async function GET(request: Request) {
     .map((t) => t.trim())
     .filter(Boolean);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+  // include_done=true keeps the caller's claimed / in-flight stops in the
+  // response (annotated with player_status) instead of dropping them.
+  // Used by the place page so "Challenges at <place>" can show a stop you
+  // already claimed as claimed rather than pretending the place is empty.
+  // The dice-roll flow keeps the default (exclusions applied).
+  const includeDone = searchParams.get("include_done") === "true";
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json(
@@ -32,6 +41,40 @@ export async function GET(request: Request) {
   const supabase = createApiClient(request);
   const auth = await requireUser(request);
 
+  // Persist the caller's last-known location for the
+  // `challenge_unlocked` notification trigger (migration 028) and run
+  // the unseen-quest backfill sweep (migration 029) so the user picks
+  // up notifications for travel challenges that went live BEFORE the
+  // trigger existed. Failures are swallowed - we never want a
+  // location persist or notification fan-out hiccup to take down the
+  // recommendations response.
+  if (auth.user) {
+    const userId = auth.user.id;
+    // These functions trust p_user, so only the server may call them (063).
+    const client = createAdminClient();
+    void (async () => {
+      const { error: touchError } = await client.rpc("touch_user_location", {
+        p_user: userId,
+        p_lat: lat,
+        p_lng: lng,
+      });
+      if (touchError) {
+        console.warn("touch_user_location failed", touchError.message);
+        return;
+      }
+      const { error: sweepError } = await client.rpc(
+        "notify_user_of_unseen_nearby_quests",
+        { p_user: userId, p_lat: lat, p_lng: lng }
+      );
+      if (sweepError) {
+        console.warn(
+          "notify_user_of_unseen_nearby_quests failed",
+          sweepError.message
+        );
+      }
+    })();
+  }
+
   let query = supabase
     .from("recommended_challenges")
     .select("*")
@@ -41,8 +84,34 @@ export async function GET(request: Request) {
     query = query.in("establishment_type", types);
   }
 
-  const { data, error } = await query;
+  const { data: rawData, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // The view knows a quest is live but not whether its dates have run out.
+  // Drop stops whose quest is outside its window (Philippine dates) so an
+  // ended quest can't be rolled, rather than failing later at accept.
+  const questIds = Array.from(
+    new Set(
+      (rawData ?? [])
+        .map((r) => (r as { travel_challenge_id?: string | null }).travel_challenge_id)
+        .filter((v): v is string => !!v)
+    )
+  );
+  let endedQuestIds = new Set<string>();
+  if (questIds.length > 0) {
+    const { data: quests } = await createAdminClient()
+      .from("travel_challenges")
+      .select("id, status, date_range_start, date_range_end")
+      .in("id", questIds);
+    const today = manilaToday();
+    endedQuestIds = new Set(
+      (quests ?? []).filter((q) => !isQuestPlayable(q as QuestWindow, today)).map((q) => q.id as string)
+    );
+  }
+  const data = (rawData ?? []).filter((r) => {
+    const questId = (r as { travel_challenge_id?: string | null }).travel_challenge_id;
+    return !questId || !endedQuestIds.has(questId);
+  });
 
   type Row = {
     id: string;
@@ -74,11 +143,11 @@ export async function GET(request: Request) {
   // Only return challenges whose business radius covers the caller.
   // Cap at 20 km so a single misconfigured radius can't reach across
   // the country.
-  const MAX_RADIUS_M = 20_000;
   const inRange = withDistance.filter((r) => {
     if (r.distance_meters == null) return false;
-    const bizRadius = r.service_radius_meters ?? 2000;
-    return r.distance_meters <= Math.min(bizRadius, MAX_RADIUS_M);
+    // Same floor/ceiling rule as /v1/travel-challenges so a merchant's reach
+    // is identical wherever their content can surface.
+    return r.distance_meters <= effectiveServiceRadius(r.service_radius_meters);
   });
 
   inRange.sort((a, b) => {
@@ -122,12 +191,21 @@ export async function GET(request: Request) {
       }
     }
 
-    pool = inRange.filter((r) => {
-      const status = derivePlayerStopStatus(
+    // Annotate every row with the caller's stop status so clients can
+    // render claimed / in-progress states, then (unless include_done)
+    // drop finished and in-flight stops from the rollable pool.
+    const annotated = inRange.map((r) => ({
+      ...r,
+      player_status: derivePlayerStopStatus(
         completionByChallenge.get(r.id as string) ?? null
-      );
-      return !isChallengeExcludedFromNearbyPool(status);
-    });
+      ),
+    }));
+
+    pool = includeDone
+      ? annotated
+      : annotated.filter(
+          (r) => !isChallengeExcludedFromNearbyPool(r.player_status)
+        );
   }
 
   return NextResponse.json({

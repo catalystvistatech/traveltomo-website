@@ -36,7 +36,7 @@ export default function TemplateLibraryPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Template Library</h1>
         <p className="text-zinc-400 mt-1">
-          Challenge ideas authored by TravelTomo admins. Open a Travel Challenge
+          Challenge ideas authored by TravelTomo admins. Open a Quest
           and click &ldquo;Clone from Template&rdquo; to pull one into your
           set.
         </p>
@@ -79,7 +79,7 @@ export default function TemplateLibraryPage() {
                   href="/admin/travel-challenges"
                   className="text-xs text-blue-400 hover:underline"
                 >
-                  Go to Travel Challenges ?
+                  Go to Quests ?
                 </Link>
               </CardContent>
             </Card>

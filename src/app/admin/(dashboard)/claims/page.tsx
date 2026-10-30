@@ -336,9 +336,9 @@ export default function ClaimsPage() {
         <EmptyState
           icon={<Sparkles className="h-6 w-6 text-zinc-500" />}
           title="No challenges yet"
-          description="Create a travel challenge to start collecting completions from travelers."
+          description="Create a quest to start collecting completions from travelers."
           ctaHref="/admin/travel-challenges"
-          ctaLabel="Create a Travel Challenge"
+          ctaLabel="Create a Quest"
         />
       ) : filteredRows.length === 0 ? (
         <EmptyState
@@ -432,11 +432,13 @@ function ClaimRowItem({ row }: { row: ClaimRow }) {
               {STATUS_ICON[status]}
               {STATUS_LABEL[status]}
             </Badge>
-            {row.challenge?.xp_reward && row.challenge.xp_reward > 0 && (
-              <Badge className="bg-green-600/20 text-green-300 text-[10px]">
-                +{row.challenge.xp_reward} XP
-              </Badge>
-            )}
+            {status !== "rejected" &&
+              row.challenge?.xp_reward &&
+              row.challenge.xp_reward > 0 && (
+                <Badge className="bg-green-600/20 text-green-300 text-[10px]">
+                  +{row.challenge.xp_reward} XP
+                </Badge>
+              )}
           </div>
           <p className="text-xs text-zinc-400 mt-0.5">
             <span className="text-zinc-200">{row.challenge?.title ?? "Challenge"}</span>
