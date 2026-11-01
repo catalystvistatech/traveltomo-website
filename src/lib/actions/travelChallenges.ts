@@ -12,7 +12,7 @@ import {
 } from "@/lib/validations/marketplace";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
-import { manilaToday } from "@/lib/quest-dates";
+import { manilaToday, QUEST_END_RULE_MESSAGE, questHasEnd } from "@/lib/quest-dates";
 
 /**
  * Gate for every quest-content action.
@@ -466,13 +466,17 @@ export async function renewTravelChallenge(id: string, endDate: string) {
   const supabase = await createClient();
   const lookup = supabase
     .from("travel_challenges")
-    .select("id, status, date_range_start")
+    .select("id, status, date_range_start, max_total_completions, current_total_completions")
     .eq("id", id);
   if (gate.scopeId) lookup.eq("merchant_id", gate.scopeId);
   const { data: quest } = await lookup.maybeSingle();
   if (!quest) return { error: "Quest not found, or you don't have permission to edit it." };
   if (!["expired", "live", "paused", "approved"].includes(quest.status as string)) {
     return { error: "Only a published quest can be run again. Publish it first." };
+  }
+  const cap = quest.max_total_completions as number | null;
+  if (cap != null && (quest.current_total_completions as number) >= cap) {
+    return { error: `All ${cap} winners have finished. Raise the winner cap in Edit first.` };
   }
 
   const { count } = await supabase
@@ -541,13 +545,16 @@ export async function submitTravelChallengeForReview(id: string) {
   // id sent by the client would have been published.
   const { data: quest, error: questError } = await supabase
     .from("travel_challenges")
-    .select("id, merchant_id")
+    .select("id, merchant_id, date_range_end, max_total_completions")
     .eq("id", id)
     .maybeSingle();
   if (questError) return { error: questError.message };
   if (!quest || (gate.scopeId && quest.merchant_id !== gate.scopeId)) {
     return { error: "Quest not found or not yours." };
   }
+  // Quests copied from a template, or saved before the rule, can be drafts
+  // with no way to end.
+  if (!questHasEnd(quest)) return { error: QUEST_END_RULE_MESSAGE };
 
   const { count: stopCount, error: countError } = await supabase
     .from("challenges")
@@ -1114,6 +1121,9 @@ export async function createQuestFromTemplate(templateId: string) {
       description: (q.description as string | null) ?? null,
       status: "draft",
       completion_mode: (q.completion_mode as string) ?? "any",
+      // Templates don't carry dates, so the copy gets the usual 30-day run.
+      date_range_start: manilaToday(),
+      date_range_end: manilaToday(new Date(Date.now() + 30 * 86_400_000)),
       max_total_completions: (q.max_total_completions as number | null) ?? null,
       big_reward_title: (q.big_reward_title as string | null) ?? null,
       big_reward_description: (q.big_reward_description as string | null) ?? null,

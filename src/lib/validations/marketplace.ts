@@ -4,6 +4,7 @@ import {
   MAX_SERVICE_RADIUS_M,
   DEFAULT_SERVICE_RADIUS_M,
 } from "@/lib/constants/service-radius";
+import { QUEST_END_RULE_MESSAGE, questHasEnd } from "@/lib/quest-window";
 
 export const ESTABLISHMENT_TYPES = [
   "restaurant",
@@ -142,6 +143,13 @@ export const travelChallengeSchema = z.object({
   big_reward_source: z.enum(["library", "custom"]).optional(),
   big_reward_reward_id: z.string().uuid().optional().or(z.literal("")),
   big_reward_save_to_library: z.coerce.boolean().optional(),
+}).superRefine((q, ctx) => {
+  if (!questHasEnd(q)) {
+    ctx.addIssue({ code: "custom", path: ["date_range_end"], message: QUEST_END_RULE_MESSAGE });
+  }
+  if (q.date_range_start && q.date_range_end && q.date_range_end < q.date_range_start) {
+    ctx.addIssue({ code: "custom", path: ["date_range_end"], message: "The end date can't be before the start date." });
+  }
 });
 
 /**
