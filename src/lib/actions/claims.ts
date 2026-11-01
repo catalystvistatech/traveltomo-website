@@ -108,6 +108,8 @@ export async function listMerchantClaims(
     )
     .in("challenge_id", wantedIds)
     .not("completed_at", "is", null)
+    // Skipped / expired stops were never submitted; they aren't claims.
+    .or("player_status.is.null,player_status.not.in.(skipped,expired)")
     .order("completed_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

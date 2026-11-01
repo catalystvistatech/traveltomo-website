@@ -47,6 +47,8 @@ export async function GET(request: Request) {
     )
     .eq("user_id", user.id)
     .not("completed_at", "is", null)
+    // Skipped / expired stops were never submitted; they aren't claims.
+    .or("player_status.is.null,player_status.not.in.(skipped,expired)")
     .order("completed_at", { ascending: false })
     .limit(limit);
 
@@ -146,12 +148,20 @@ export async function GET(request: Request) {
     {} as Record<string, number>
   );
 
-  return NextResponse.json({
-    data: result,
-    counts: {
-      pending: counts.pending ?? 0,
-      verified: counts.verified ?? 0,
-      rejected: counts.rejected ?? 0,
+  return NextResponse.json(
+    {
+      data: result,
+      counts: {
+        pending: counts.pending ?? 0,
+        verified: counts.verified ?? 0,
+        rejected: counts.rejected ?? 0,
+      },
     },
-  });
+    {
+      // User-scoped, so private cache only. 30 s is enough for the
+      // My Rewards tab to feel instant on re-open without masking
+      // a real verification flip.
+      headers: { "Cache-Control": "private, max-age=30" },
+    }
+  );
 }

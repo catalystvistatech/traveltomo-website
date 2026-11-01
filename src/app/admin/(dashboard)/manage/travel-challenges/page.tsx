@@ -64,8 +64,8 @@ export default function ManageTravelChallengesPage() {
       } else {
         toast.success(
           action === "approved"
-            ? "Travel challenge approved and live."
-            : "Travel challenge rejected."
+            ? "Quest approved and live."
+            : "Quest rejected."
         );
         await reload();
       }
@@ -76,10 +76,10 @@ export default function ManageTravelChallengesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">
-          Travel Challenge Reviews
+          Quest Reviews
         </h1>
         <p className="text-zinc-400 mt-1">
-          Approve a parent travel challenge to also set all of its child
+          Approve a parent quest to also set all of its child
           challenges live for travelers.
         </p>
       </div>
@@ -90,7 +90,7 @@ export default function ManageTravelChallengesPage() {
             <ShieldCheck className="h-12 w-12 text-zinc-600 mb-4" />
             <h3 className="text-lg font-medium text-white">All clear</h3>
             <p className="text-zinc-400 mt-1">
-              No travel challenges are pending review.
+              No quests are pending review.
             </p>
           </CardContent>
         </Card>
@@ -166,7 +166,7 @@ export default function ManageTravelChallengesPage() {
                     <p className="text-sm text-amber-400/90">
                       Needs {TRAVEL_CHALLENGE_STOP_COUNT - childCount} more stop
                       {TRAVEL_CHALLENGE_STOP_COUNT - childCount === 1 ? "" : "s"}{" "}
-                      before approval — travel challenges must have{" "}
+                      before approval — quests must have{" "}
                       {TRAVEL_CHALLENGE_STOP_COUNT} stops for dice rolls.
                     </p>
                   ) : null}

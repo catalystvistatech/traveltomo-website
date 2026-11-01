@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
+import { isQuestPlayable, manilaToday, type QuestWindow } from "@/lib/quest-dates";
 import { createApiClient } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { discoveryRadiusMeters, inServiceArea } from "@/lib/constants/discovery-radius";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 /**
- * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=20
+ * GET /v1/travel-challenges?lat=..&lng=..&limit=20&offset=0&max_radius_km=150
  *
- * Returns live travel challenges near a given coordinate. A challenge is
- * only included when the caller falls within its business's own
- * `service_radius_meters` — the radius the merchant configured in
- * Business Profile. The optional `max_radius_km` is a hard ceiling so a
- * misconfigured 100 km business doesn't pollute everyone's home feed
- * (defaults to 20 km).
+ * Returns live travel challenges near a given coordinate, using the same
+ * reach as `/v1/featured` (see constants/discovery-radius.ts) so the two
+ * lists never contradict each other. Quests whose business service area
+ * the caller is already inside come first (`in_area: true`), then the rest
+ * nearest-first.
  *
  * Supports cursor-based pagination via `offset` + `limit`.
  */
@@ -19,8 +22,7 @@ export async function GET(request: Request) {
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
   const offset = Math.max(parseInt(searchParams.get("offset") ?? "0") || 0, 0);
-  const maxRadiusKm = parseFloat(searchParams.get("max_radius_km") ?? "20");
-  const maxRadiusMeters = maxRadiusKm * 1000;
+  const maxRadiusMeters = discoveryRadiusMeters(searchParams.get("max_radius_km"));
 
   const supabase = createApiClient(request);
 
@@ -29,14 +31,17 @@ export async function GET(request: Request) {
     .select(
       `id, title, description, cover_url, completion_mode,
        big_reward_title, big_reward_description, big_reward_discount_type,
-       big_reward_discount_value, status, created_at,
+       big_reward_discount_value, status, created_at, date_range_start, date_range_end,
        business:businesses!travel_challenges_business_id_fkey (
          id, name, city, latitude, longitude, establishment_type, service_radius_meters
        ),
        children:challenges!travel_challenge_id ( id )`
     )
     .eq("status", "live")
-    .limit(limit * 3);
+    .is("deleted_at", null)
+    // Distance filtering and sorting happen below, so read enough rows for
+    // the nearest quests to always be in the set (same bound as Featured).
+    .limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -52,6 +57,8 @@ export async function GET(request: Request) {
     big_reward_discount_value: number | null;
     status: string;
     created_at: string;
+    date_range_start: string | null;
+    date_range_end: string | null;
     business:
       | {
           id: string;
@@ -68,7 +75,14 @@ export async function GET(request: Request) {
 
   const hasCoord = Number.isFinite(lat) && Number.isFinite(lng);
 
-  const ranked = (data ?? []).map((raw) => {
+  // Hide quests outside their campaign window right away (Philippine
+  // dates) instead of waiting for the hourly expiry cron.
+  const today = manilaToday();
+  const running = (data ?? []).filter((raw) =>
+    isQuestPlayable(raw as unknown as QuestWindow, today)
+  );
+
+  const ranked = running.map((raw) => {
     const r = raw as unknown as Row;
     const blat = r.business?.latitude ?? null;
     const blng = r.business?.longitude ?? null;
@@ -97,23 +111,18 @@ export async function GET(request: Request) {
       establishment_type: r.business?.establishment_type ?? null,
       distance_meters: distance,
       service_radius_meters: businessRadius,
+      in_area: inServiceArea(distance, businessRadius),
     };
   });
 
-  // A challenge is in-range when the caller falls within the business's
-  // own service radius (capped by max_radius_km so a 100 km business
-  // doesn't reach into every city). When no coordinate is provided, we
-  // return everything so the screen has *something* to show.
+  // Same reach as Featured. Without a coordinate, return everything so the
+  // screen has *something* to show.
   const filtered = hasCoord
-    ? ranked.filter((r) => {
-        if (r.distance_meters == null) return false;
-        const businessRadius = r.service_radius_meters ?? 2000; // default to 2km
-        const effectiveRadius = Math.min(businessRadius, maxRadiusMeters);
-        return r.distance_meters <= effectiveRadius;
-      })
+    ? ranked.filter((r) => r.distance_meters != null && r.distance_meters <= maxRadiusMeters)
     : ranked;
 
   filtered.sort((a, b) => {
+    if (a.in_area !== b.in_area) return a.in_area ? -1 : 1;
     const da = a.distance_meters ?? Number.POSITIVE_INFINITY;
     const db = b.distance_meters ?? Number.POSITIVE_INFINITY;
     return da - db;
@@ -121,12 +130,45 @@ export async function GET(request: Request) {
 
   const page = filtered.slice(offset, offset + limit);
 
-  return NextResponse.json({
-    data: page,
-    count: page.length,
-    total: filtered.length,
-    has_more: offset + limit < filtered.length,
-  });
+  // Quests without a cover photo rendered as a plain blue gradient in the
+  // app. Fall back to the business's own place photo (mirrored from Google
+  // by 047) so every card shows the actual place.
+  const needCover = Array.from(
+    new Set(page.filter((r) => !r.cover_url && r.business_id).map((r) => r.business_id as string))
+  );
+  if (needCover.length > 0) {
+    const { data: photos } = await createAdminClient()
+      .from("places")
+      .select("business_id, image_url")
+      .in("business_id", needCover)
+      .not("image_url", "is", null);
+    const photoByBusiness = new Map(
+      (photos ?? []).map((p) => [p.business_id as string, p.image_url as string])
+    );
+    for (const r of page) {
+      if (!r.cover_url && r.business_id) r.cover_url = photoByBusiness.get(r.business_id) ?? null;
+    }
+  }
+
+  return NextResponse.json(
+    {
+      data: withFreshPhotos(page),
+      count: page.length,
+      total: filtered.length,
+      has_more: offset + limit < filtered.length,
+    },
+    {
+      headers: {
+        // Anonymous, location-keyed list. Quantizing lat/lng (~1km grid)
+        // on the client + this header lets the Vercel CDN collapse
+        // identical requests across users; revalidation in the background
+        // keeps the feed fresh without origin hits during cold-launch
+        // waves.
+        "Cache-Control":
+          "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    }
+  );
 }
 
 function haversine(

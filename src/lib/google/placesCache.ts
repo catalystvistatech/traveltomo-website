@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { NormalizedPlace } from "./places";
+import { googlePlaceEnrichment, type NormalizedPlace } from "./places";
 
 /**
  * Default cache TTL for Google Places lookups, in hours. POIs change
@@ -194,6 +194,59 @@ export async function mirrorPlaces(
     const row = byGoogle.get(p.google_place_id);
     return row ? { ...p, id: row.id as string } : p;
   });
+}
+
+/**
+ * Backfills Google-listing photos (+ rating) onto place rows that lack an
+ * image but carry a `google_place_id` — i.e. rows mirrored from a merchant
+ * business (migration 047) rather than from a Google search, which come in
+ * photo-less even when the venue has a Google Business listing (reported
+ * with Palo Verde Resort rendering as a gradient card).
+ *
+ * Persists the enrichment so each place pays the Place Details call once,
+ * and returns the input with hydrated `image_url`s. Capped per request to
+ * bound latency on the hot path.
+ */
+export async function hydrateMissingPlacePhotos<
+  T extends {
+    id: string;
+    image_url: string | null;
+    google_place_id: string | null;
+  }
+>(places: T[], maxLookups = 3): Promise<T[]> {
+  const candidates = places
+    .filter((p) => !p.image_url && p.google_place_id)
+    .slice(0, maxLookups);
+  if (candidates.length === 0) return places;
+
+  const admin = createAdminClient();
+  const hydrated = new Map<string, string>();
+
+  await Promise.all(
+    candidates.map(async (place) => {
+      const enrichment = await googlePlaceEnrichment(place.google_place_id!);
+      if (!enrichment?.image_url) return;
+      hydrated.set(place.id, enrichment.image_url);
+      await admin
+        .from("places")
+        .update({
+          image_url: enrichment.image_url,
+          // Only fill blanks — a merchant-set rating should never exist,
+          // but keep the guard for future sources.
+          ...(enrichment.rating != null ? { rating: enrichment.rating } : {}),
+          ...(enrichment.user_ratings_total != null
+            ? { user_ratings_total: enrichment.user_ratings_total }
+            : {}),
+        })
+        .eq("id", place.id)
+        .is("image_url", null);
+    })
+  );
+
+  if (hydrated.size === 0) return places;
+  return places.map((p) =>
+    hydrated.has(p.id) ? { ...p, image_url: hydrated.get(p.id)! } : p
+  );
 }
 
 // ---------------------------------------------------------------------------

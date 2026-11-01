@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { withFreshPhotos } from "@/lib/google/photo-url";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -24,5 +25,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data, count: data?.length ?? 0 });
+  return NextResponse.json({ data: withFreshPhotos(data), count: data?.length ?? 0 });
 }

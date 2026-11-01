@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  MIN_SERVICE_RADIUS_M,
+  MAX_SERVICE_RADIUS_M,
+  DEFAULT_SERVICE_RADIUS_M,
+} from "@/lib/constants/service-radius";
+import { QUEST_END_RULE_MESSAGE, questHasEnd } from "@/lib/quest-window";
 
 export const ESTABLISHMENT_TYPES = [
   "restaurant",
@@ -9,6 +15,7 @@ export const ESTABLISHMENT_TYPES = [
   "bar",
   "shop",
   "spa",
+  "animal_themed",
   "other",
 ] as const;
 
@@ -26,6 +33,7 @@ export const ESTABLISHMENT_LABELS: Record<EstablishmentType, string> = {
   bar: "Bar",
   shop: "Shop",
   spa: "Spa",
+  animal_themed: "Animal-Themed",
   other: "Other",
 };
 
@@ -87,7 +95,16 @@ export const extendedBusinessSchema = z.object({
   establishment_type: z.enum(ESTABLISHMENT_TYPES, { message: "Please select a business type" }),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
-  service_radius_meters: z.coerce.number().int().min(100, "Radius must be at least 100m").max(20000, "Radius cannot exceed 20km").default(2000),
+  // Floor is 500m, not 100m: a radius that small makes a merchant invisible
+  // (nobody comes within 100m of a venue by chance) with nothing telling them
+  // their own setting is the cause. Kept in sync with the read-time clamp in
+  // `@/lib/constants/service-radius`.
+  service_radius_meters: z.coerce
+    .number()
+    .int()
+    .min(MIN_SERVICE_RADIUS_M, `Radius must be at least ${MIN_SERVICE_RADIUS_M}m`)
+    .max(MAX_SERVICE_RADIUS_M, "Radius cannot exceed 20km")
+    .default(DEFAULT_SERVICE_RADIUS_M),
   timezone: z.string().default("Asia/Manila"),
   contact_email: z.string().email("Please enter a valid email").optional().or(z.literal("")),
   contact_phone: z.string().max(30, "Phone number is too long").optional().or(z.literal("")),
@@ -118,7 +135,37 @@ export const travelChallengeSchema = z.object({
     .enum(["percentage", "fixed", "freebie"])
     .optional(),
   big_reward_discount_value: z.coerce.number().min(0).optional(),
+  // New: where the big reward came from.
+  //   library  -> reuse an existing library reward row (id required)
+  //   custom   -> the title/description/type/value fields above hold
+  //               the new reward; optionally also persist a copy in
+  //               the merchant's library for future reuse.
+  big_reward_source: z.enum(["library", "custom"]).optional(),
+  big_reward_reward_id: z.string().uuid().optional().or(z.literal("")),
+  big_reward_save_to_library: z.coerce.boolean().optional(),
+}).superRefine((q, ctx) => {
+  if (!questHasEnd(q)) {
+    ctx.addIssue({ code: "custom", path: ["date_range_end"], message: QUEST_END_RULE_MESSAGE });
+  }
+  if (q.date_range_start && q.date_range_end && q.date_range_end < q.date_range_start) {
+    ctx.addIssue({ code: "custom", path: ["date_range_end"], message: "The end date can't be before the start date." });
+  }
 });
+
+/**
+ * Standalone "library" reward — owned by a merchant, not tied to any
+ * single challenge. Used as a reusable pool the merchant can pick from
+ * when setting the big reward on a travel challenge.
+ */
+export const libraryRewardSchema = z.object({
+  title: z.string().min(3, "Title needs at least 3 characters").max(100, "Title is too long"),
+  description: z.string().max(300, "Description is too long").optional().or(z.literal("")),
+  discount_type: z.enum(["percentage", "fixed", "freebie"]).default("freebie"),
+  discount_value: z.coerce.number().min(0, "Value cannot be negative").optional(),
+  max_redemptions: z.coerce.number().int().positive().optional(),
+  expires_at: z.string().optional().or(z.literal("")),
+});
+export type LibraryRewardInput = z.infer<typeof libraryRewardSchema>;
 
 export const childChallengeSchema = z.object({
   title: z.string().min(3, "Title needs at least 3 characters").max(120, "Title is too long"),
@@ -127,7 +174,7 @@ export const childChallengeSchema = z.object({
   type: z.enum(["checkin", "photo", "qr", "quiz"]).default("checkin"),
   verification_type: z
     .enum(["gps", "qr_scan", "photo_upload", "quiz_answer"])
-    .default("gps"),
+    .default("photo_upload"),
   establishment_type: z.enum(ESTABLISHMENT_TYPES).optional(),
   xp_reward: z.coerce.number().int().min(10, "XP reward must be at least 10").max(500, "XP reward cannot exceed 500").default(50),
   radius_meters: z.coerce.number().int().min(10, "Radius must be at least 10m").max(1000, "Radius cannot exceed 1000m").default(50),

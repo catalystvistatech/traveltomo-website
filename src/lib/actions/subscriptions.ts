@@ -5,12 +5,9 @@ import { getCurrentUser } from "@/lib/actions/auth";
 import { subscriptionSchema } from "@/lib/validations/marketplace";
 import { createInvoice, isMockMode } from "@/lib/payments/xendit";
 import { revalidatePath } from "next/cache";
+import { PROMOTION_TIER_PRICES_CENTS } from "@/lib/constants/promotion-tiers";
 
-const TIER_PRICES_CENTS: Record<"basic" | "featured" | "premium", number> = {
-  basic: 9900,
-  featured: 29900,
-  premium: 79900,
-};
+const TIER_PRICES_CENTS = PROMOTION_TIER_PRICES_CENTS;
 
 export async function getActiveSubscription() {
   const user = await getCurrentUser();
@@ -90,6 +87,20 @@ export async function startSubscription(input: unknown) {
     .single();
 
   if (error) return { error: { _form: [error.message] } };
+
+  // Switching tiers cancels the merchant's previously active promotion so
+  // only one runs at a time. We only do this once the new one is actually
+  // active (mock mode); in live mode the prior promotion stays until the
+  // Xendit webhook activates this one and cancels the rest.
+  if (subscriptionStatus === "active") {
+    await supabase
+      .from("merchant_subscriptions")
+      .update({ status: "cancelled" })
+      .eq("merchant_id", user.id)
+      .eq("status", "active")
+      .neq("id", data.id);
+  }
+
   revalidatePath("/admin", "layout");
   return {
     success: true,

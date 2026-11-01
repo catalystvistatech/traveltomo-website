@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -58,11 +59,15 @@ export async function POST(request: Request, { params }: Params) {
     });
   }
 
+  // Travelers can't write progress themselves (065), so the code is minted
+  // on the server's client, and only onto the caller's finished session.
   const code = generateClaimCode();
-  const { error: updateError } = await client
+  const { error: updateError } = await createAdminClient()
     .from("travel_challenge_progress")
     .update({ big_reward_claim_code: code, updated_at: new Date().toISOString() })
-    .eq("id", progress.id);
+    .eq("id", progress.id)
+    .eq("user_id", user.id)
+    .eq("status", "completed");
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });

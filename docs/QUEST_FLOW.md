@@ -1,4 +1,4 @@
-# Quest Flow — Product Spec
+# Quest Flow ï¿½ Product Spec
 
 Source: client (Christine). This is the canonical 10-step traveler
 experience. Every product / engineering / design decision should map
@@ -10,6 +10,19 @@ implementation honest.
 > them all over 2-3 hours, and walks into the merchant's physical
 > shop to claim the BIG REWARD. The merchant gets foot traffic; the
 > traveler gets an adventure; everyone shares it on social.
+
+---
+
+## Terminology
+
+Player-facing copy calls these **Quests**. Backend tables / API paths /
+type names keep `travel_challenge*` (`travel_challenges`,
+`travel_challenge_progress`, `/v1/travel-challenges/*`,
+`TravelChallenge` Swift types, `travelChallenges.ts` server actions)
+to preserve the existing wire contract; the rename is strictly
+cosmetic. When you see "quest" in prose below, that's the product
+term; when you see backtick-formatted `travel_challenge*` identifiers,
+those are the live schema/API names and must stay as-is.
 
 ---
 
@@ -25,7 +38,7 @@ Sees quests from **nearby merchants** on Home.
   stop count.
 
 **Code**
-- `src/app/v1/travel-challenges/route.ts` — radius-filtered list
+- `src/app/v1/travel-challenges/route.ts` ï¿½ radius-filtered list
 - iOS: `Presentation/Screens/Main/Home/Components/HomeCards.swift`
   (`TravelChallengesCard`)
 
@@ -38,7 +51,7 @@ Card shows: merchant, big reward title + description, # of challenges,
 area, mini-rewards along the way, current progress (if returning).
 
 **Code**
-- `src/app/v1/travel-challenges/[id]/route.ts` — detail payload
+- `src/app/v1/travel-challenges/[id]/route.ts` ï¿½ detail payload
 - iOS: `Presentation/Screens/Main/Quest/QuestPreviewView.swift`
 - Router: `AppRouter.questPreview(id:, title:)`
 
@@ -57,7 +70,7 @@ lands on a random challenge from the user's incomplete-stops pool.
 - `MapViewModel.startRoll()` + `playRollAnimation(landingOn:)`
 - `Presentation/Screens/Main/Map/Components/DiceView.swift` +
   `Dice3DView.swift`
-- `ChallengeMapView` — full-screen roll overlay
+- `ChallengeMapView` ï¿½ full-screen roll overlay
 
 ---
 
@@ -109,13 +122,13 @@ On success ? **RewardQRView** shows:
 ### 6. ?? Rolls again ? next challenge
 
 After the user dismisses the reward QR, `returnToStackAfterReward()`
-reloads the travel challenge. The pool excludes already-`claimed`
-stops so the next roll is honest. Sequence is unpredictable — the user
+reloads the quest. The pool excludes already-`claimed`
+stops so the next roll is honest. Sequence is unpredictable ï¿½ the user
 never knows which of the remaining stops they'll get.
 
 **Code**
 - `MapViewModel.returnToStackAfterReward()`
-- `src/lib/challenge-progress.ts` — `derivePlayerStopStatus` excludes
+- `src/lib/challenge-progress.ts` ï¿½ `derivePlayerStopStatus` excludes
   `claimed` / `submitted` from the rollable pool
 
 ---
@@ -127,14 +140,14 @@ Roll-mode accept sheet has a **Skip - re-roll (N left)** action.
 - Skip 1-3: `POST /v1/travel-challenges/:id/skip` ? consumes from
   `travel_challenge_progress.skips_used` (budget = `skips_limit`,
   default 3) ? re-rolls in place.
-- After 3 skips: `SideAdBanner` appears at the bottom of the map —
+- After 3 skips: `SideAdBanner` appears at the bottom of the map ï¿½
   small, dismissable, with **Watch ad to skip** CTA that escalates to
   the rewarded ad overlay.
 - The legacy global skip pool (`profiles.free_skips_used`, 3 per 3h)
   still backs nearby Roll/Route browse outside of quests.
 
 **Code**
-- Migration `supabase/021_quest_skips.sql` — `consume_quest_skip` RPC
+- Migration `supabase/021_quest_skips.sql` ï¿½ `consume_quest_skip` RPC
 - `src/app/v1/travel-challenges/[id]/skip/route.ts`
 - iOS: `MapViewModel.skipQuestStop(...)` +
   `Presentation/Screens/Main/Map/Components/SideAdBanner.swift`
@@ -143,18 +156,19 @@ Roll-mode accept sheet has a **Skip - re-roll (N left)** action.
 
 ### 8. ?? Completes ALL challenges (minimum 6)
 
-Publish rule: a travel challenge can only go `live` with
-`TRAVEL_CHALLENGE_STOP_COUNT = 6` stops. Once every stop's
+Publish rule: a quest can only go `live` with
+`TRAVEL_CHALLENGE_STOP_COUNT = 6` stops (the constant keeps its
+schema-aligned name). Once every stop's
 `player_status = 'claimed'`,
 `syncTravelChallengeProgressCompletion()` flips
 `travel_challenge_progress.status` to `'completed'`.
 
 **Code**
 - `src/lib/validations/marketplace.ts` (constant)
-- `src/lib/actions/travelChallenges.ts` —
+- `src/lib/actions/travelChallenges.ts` ï¿½
   `submitTravelChallengeForReview` + `reviewTravelChallenge` enforce
   the 6-stop minimum
-- `src/lib/challenge-progress.ts` —
+- `src/lib/challenge-progress.ts` ï¿½
   `syncTravelChallengeProgressCompletion`
 
 ---
@@ -210,7 +224,7 @@ Find your own adventure at https://www.traveltomo.app
 | # | Challenge | Mini reward |
 |---|-----------|-------------|
 | 1 | Find cats to feed at the CCTV operator house near CDC | Cat feeds OR voucher ? |
-| 2 | Feed the cats — take a selfie! | +50 XP ? |
+| 2 | Feed the cats ï¿½ take a selfie! | +50 XP ? |
 | 3 | Find the hidden mural near Gate 3 | 10% off souvenir shop ? |
 | 4 | Take a photo of the oldest tree at the CDC entrance | +50 XP ? |
 | 5 | Buy a snack from the nearest sari-sari store | +50 XP ? |

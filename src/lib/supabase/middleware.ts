@@ -36,7 +36,11 @@ export async function updateSession(request: NextRequest) {
     // /admin/verify must be reachable without a session: users arrive
     // here after registration to submit the 6-digit email confirmation
     // code, which is what creates their session in the first place.
-    pathname === "/admin/verify";
+    pathname === "/admin/verify" ||
+    // Forgot-password is reachable without a session. (reset-password is
+    // intentionally NOT here: the user has a recovery session by then, and
+    // listing it would bounce them to /admin before they set a password.)
+    pathname === "/admin/forgot-password";
   const isCallback = pathname.startsWith("/admin/auth/callback");
 
   if (isCallback) {

@@ -1,19 +1,39 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Mock Xendit webhook receiver.
+ * Xendit invoice webhook.
  *
  * POST /v1/payments/xendit-webhook
+ * Header: x-callback-token: <XENDIT_WEBHOOK_TOKEN>
  * Body: { external_id: string, status: "PAID" | "EXPIRED" | "FAILED" }
  *
- * In production we'd verify the `x-callback-token` header, look up the
- * matching subscription, and flip its status accordingly. Here we trust
- * the caller (no token) because mock mode already activates subscriptions
- * synchronously. This endpoint exists so QA can simulate a late webhook
- * and exercise the 'pending' -> 'active' transition.
+ * Xendit signs callbacks with the account's verification token in the
+ * `x-callback-token` header. It must match XENDIT_WEBHOOK_TOKEN; with no
+ * token configured the endpoint refuses everything (fail closed). It used
+ * to trust any caller, so anyone who knew an external_ref could mark a
+ * promotion paid. QA can still simulate a late webhook by sending the
+ * configured token.
  */
+function hasValidCallbackToken(request: Request): boolean | null {
+  const expected = process.env.XENDIT_WEBHOOK_TOKEN;
+  if (!expected) return null;
+  const given = request.headers.get("x-callback-token") ?? "";
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export async function POST(request: Request) {
+  const tokenOk = hasValidCallbackToken(request);
+  if (tokenOk === null) {
+    return NextResponse.json({ error: "webhook_not_configured" }, { status: 503 });
+  }
+  if (!tokenOk) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json().catch(() => null)) as
     | { external_id?: string; status?: string }
     | null;
@@ -29,7 +49,7 @@ export async function POST(request: Request) {
 
   const { data: subscription } = await admin
     .from("merchant_subscriptions")
-    .select("id, status")
+    .select("id, status, merchant_id")
     .eq("external_ref", body.external_id)
     .maybeSingle();
 
@@ -51,6 +71,17 @@ export async function POST(request: Request) {
     .eq("id", subscription.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Once this promotion is active, cancel the merchant's other active
+  // promotions so only one runs at a time (tier switch supersedes the old).
+  if (nextStatus === "active" && subscription.merchant_id) {
+    await admin
+      .from("merchant_subscriptions")
+      .update({ status: "cancelled" })
+      .eq("merchant_id", subscription.merchant_id)
+      .eq("status", "active")
+      .neq("id", subscription.id);
+  }
 
   return NextResponse.json({ ok: true, subscription_id: subscription.id, status: nextStatus });
 }
